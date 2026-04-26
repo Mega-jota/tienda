@@ -230,6 +230,8 @@ export default function POSApp() {
   const [editUser, setEditUser] = useState(null);
   const [configModal, setConfigModal] = useState(false);
   const [saleDetailModal, setSaleDetailModal] = useState(null);
+  const [categoryModal, setCategoryModal] = useState(false);
+  const [editCategory, setEditCategory] = useState(null);
 
   // Guardar en localStorage cada vez que cambia
   useEffect(() => { saveData("products", products); }, [products]);
@@ -344,10 +346,22 @@ export default function POSApp() {
   };
   const deleteUser = (id) => { if (id !== currentUser.id) setUsers(prev => prev.filter(u => u.id !== id)); };
 
+  const saveCategory = (formData) => {
+    if (editCategory) setCategories(prev => prev.map(c => c.id === editCategory.id ? { ...c, ...formData } : c));
+    else setCategories(prev => [...prev, { ...formData, id: Date.now() }]);
+    setCategoryModal(false); setEditCategory(null);
+  };
+  const deleteCategory = (id) => {
+    const hasProducts = products.some(p => p.categoryId === id);
+    if (hasProducts) { alert("No se puede eliminar: hay productos en esta categoría. Mueve los productos primero."); return; }
+    setCategories(prev => prev.filter(c => c.id !== id));
+  };
+
   const isAdmin = currentUser.role === "admin";
   const tabs = [
     { id: "pos", label: "💰 Venta", show: true },
     { id: "products", label: "📦 Productos", show: isAdmin },
+    { id: "categories", label: "🏷️ Categorías", show: isAdmin },
     { id: "providers", label: "🚚 Proveedores", show: isAdmin },
     { id: "sales", label: "📊 Ventas", show: true },
     { id: "users", label: "👥 Usuarios", show: isAdmin },
@@ -512,6 +526,38 @@ export default function POSApp() {
                   })}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* ═══ CATEGORÍAS ═══ */}
+        {activeTab === "categories" && (
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+              <h2 style={{ margin: 0, fontSize: 20 }}>🏷️ Categorías de Productos</h2>
+              <Btn variant="primary" onClick={() => { setEditCategory(null); setCategoryModal(true); }}>+ Nueva Categoría</Btn>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
+              {categories.map(c => {
+                const productCount = products.filter(p => p.categoryId === c.id).length;
+                return (
+                  <div key={c.id} style={{ background: colors.card, borderRadius: 12, border: `1px solid ${colors.border}`, padding: 20 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                      <div style={{ fontSize: 18, fontWeight: 700 }}>🏷️ {c.name}</div>
+                      <Badge color={colors.accent}>{productCount} productos</Badge>
+                    </div>
+                    {productCount > 0 && (
+                      <div style={{ fontSize: 12, color: colors.textDim, marginBottom: 12 }}>
+                        {products.filter(p => p.categoryId === c.id).map(p => p.name).join(", ")}
+                      </div>
+                    )}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <Btn variant="ghost" size="sm" onClick={() => { setEditCategory(c); setCategoryModal(true); }}>✏️ Editar</Btn>
+                      <Btn variant="ghost" size="sm" onClick={() => deleteCategory(c.id)}>🗑️ Eliminar</Btn>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -684,6 +730,10 @@ export default function POSApp() {
         <ProviderForm provider={editProvider} onSave={saveProvider} onCancel={() => { setProviderModal(false); setEditProvider(null); }} />
       </Modal>
 
+      <Modal open={categoryModal} onClose={() => { setCategoryModal(false); setEditCategory(null); }} title={editCategory ? "✏️ Editar Categoría" : "🏷️ Nueva Categoría"}>
+        <CategoryForm category={editCategory} onSave={saveCategory} onCancel={() => { setCategoryModal(false); setEditCategory(null); }} />
+      </Modal>
+
       <Modal open={userModal} onClose={() => { setUserModal(false); setEditUser(null); }} title={editUser ? "✏️ Editar Usuario" : "👤 Nuevo Usuario"}>
         <UserForm user={editUser} onSave={saveUser} onCancel={() => { setUserModal(false); setEditUser(null); }} />
       </Modal>
@@ -845,6 +895,29 @@ function UserForm({ user, onSave, onCancel }) {
       <div style={{ display: "flex", gap: 8, marginTop: 20, justifyContent: "flex-end" }}>
         <Btn variant="ghost" onClick={onCancel}>Cancelar</Btn>
         <Btn variant="primary" disabled={!valid} onClick={() => onSave(form)}>{user ? "Guardar" : "Crear Usuario"}</Btn>
+      </div>
+    </div>
+  );
+}
+
+function CategoryForm({ category, onSave, onCancel }) {
+  const [form, setForm] = useState(category || { name: "" });
+  const valid = form.name.trim().length > 0;
+  return (
+    <div>
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ color: colors.textMuted, fontSize: 12, fontWeight: 500, display: "block", marginBottom: 6 }}>Nombre de la Categoría</label>
+        <input
+          style={baseInput}
+          value={form.name}
+          onChange={e => setForm({ ...form, name: e.target.value })}
+          placeholder="Ej: Abarrotes, Bebidas, Lácteos..."
+          autoFocus
+        />
+      </div>
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <Btn variant="ghost" onClick={onCancel}>Cancelar</Btn>
+        <Btn variant="primary" disabled={!valid} onClick={() => onSave(form)}>{category ? "Guardar Cambios" : "Crear Categoría"}</Btn>
       </div>
     </div>
   );
