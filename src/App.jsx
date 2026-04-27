@@ -234,12 +234,40 @@ export default function POSApp() {
           <span style={{fontWeight:800,fontSize:18,color:C.accent}}>{storeName}</span>
           <div style={{display:"flex",gap:2,marginLeft:8}}>{tabs.map(t=><button key={t.id} onClick={()=>setActiveTab(t.id)} style={{background:activeTab===t.id?C.accent:C.surface,color:"#fff",border:"none",borderRadius:4,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"'Segoe UI',system-ui,sans-serif",letterSpacing:0.5}}>{t.label}</button>)}</div>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          {saving&&<Badge bg={C.warning}>GUARDANDO</Badge>}
-          <Badge bg={C.success}>● ONLINE</Badge>
-          <span style={{color:C.textMuted,fontSize:12}}>{currentUser.name}</span>
-          <Btn bg={C.danger} size="sm" onClick={()=>{setCurrentUser(null);setCart([]);setDiscountPercent(0);}}>SALIR</Btn>
-        </div>
+        
+        <div style={{display:"flex", alignItems:"center", gap:10}}>
+  {saving&&<Badge bg={C.warning}>GUARDANDO</Badge>}
+  <Badge bg={C.success}>● ONLINE</Badge>
+  <span style={{color:C.textMuted, fontSize:12}}>{currentUser.name}</span>
+  
+  {/* BOTÓN ENGRANAJE - Solo visible para administradores */}
+  {isAdmin && (
+    <button 
+      onClick={() => setConfigModal(true)}
+      style={{
+        background: "transparent",
+        border: "none",
+        fontSize: 20,
+        cursor: "pointer",
+        color: C.textMuted,
+        padding: "4px 8px",
+        borderRadius: 6,
+        transition: "all 0.2s",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
+      }}
+      onMouseEnter={(e) => e.currentTarget.style.background = C.surface}
+      onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+      title="Configuración del negocio"
+    >
+      ⚙️
+    </button>
+  )}
+  
+  <Btn bg={C.danger} size="sm" onClick={()=>{setCurrentUser(null); setCart([]); setDiscountPercent(0);}}>SALIR</Btn>
+</div>
+        
       </div>
 
       <div style={{padding:16,maxWidth:1500,margin:"0 auto"}}>
