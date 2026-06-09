@@ -52,7 +52,7 @@ const TicketPreview = ({ sale, storeName }) => {
 };
 
 // Cierre de Caja
-const CierreCaja = ({ sales, storeName, currentUser, onClose }) => {
+const CierreCaja = ({ sales, products, storeName, currentUser, onClose }) => {
   const ref = useRef(null);
   const today = todayStr();
   const todaySales = sales.filter(s => s.created_at && s.created_at.startsWith(today));
@@ -62,6 +62,10 @@ const CierreCaja = ({ sales, storeName, currentUser, onClose }) => {
   const totalDcto = todaySales.reduce((s, v) => s + (v.discount_amount || 0), 0);
   const byPayment = { cash: 0, debit: 0, credit: 0, transfer: 0 };
   todaySales.forEach(s => { byPayment[s.payment] = (byPayment[s.payment] || 0) + s.total; });
+  let totalCosto = 0;
+  todaySales.forEach(s => (s.sale_items || []).forEach(it => { const prod = products.find(p => p.id === it.product_id); totalCosto += (prod ? prod.cost : 0) * it.qty; }));
+  const ganancia = totalNeto - totalCosto;
+  const margenPct = totalNeto > 0 ? (ganancia / totalNeto * 100).toFixed(1) : 0;
   const topProducts = {};
   todaySales.forEach(s => (s.sale_items || []).forEach(it => { topProducts[it.product_name] = (topProducts[it.product_name] || 0) + it.qty; }));
   const topList = Object.entries(topProducts).sort((a, b) => b[1] - a[1]).slice(0, 10);
@@ -89,6 +93,13 @@ const CierreCaja = ({ sales, storeName, currentUser, onClose }) => {
       </div>
       <div style={{ borderTop: "2px solid #000", margin: "8px 0" }} />
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, fontWeight: "bold" }}><span>TOTAL:</span><span>{fmt(totalVentas)}</span></div>
+      <div style={{ borderTop: "1px dashed #000", margin: "8px 0" }} />
+      <div style={{ fontSize: 11 }}>
+        <div style={{ fontWeight: "bold", marginBottom: 4 }}>RENTABILIDAD:</div>
+        <div style={{ display: "flex", justifyContent: "space-between" }}><span>Costo productos:</span><span>{fmt(totalCosto)}</span></div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "bold" }}><span>Ganancia neta:</span><span>{fmt(ganancia)}</span></div>
+        <div style={{ display: "flex", justifyContent: "space-between" }}><span>Margen:</span><span>{margenPct}%</span></div>
+      </div>
       {topList.length > 0 && <>
         <div style={{ borderTop: "1px dashed #000", margin: "8px 0" }} />
         <div style={{ fontSize: 10, fontWeight: "bold", marginBottom: 4 }}>TOP PRODUCTOS VENDIDOS:</div>
@@ -118,7 +129,7 @@ export default function POSApp() {
   const [prodCatFilter,setProdCatFilter]=useState(null);
   const [reportPeriod,setReportPeriod]=useState("today");
   const [salesSearch,setSalesSearch]=useState("");
-  const APP_VERSION = "v4.0";
+  const APP_VERSION = "v4.1";
   const searchRef=useRef(null);
 
   useEffect(()=>{loadAllData();},[]);
@@ -403,6 +414,14 @@ export default function POSApp() {
           const rByUser={};filteredSales.forEach(s=>{rByUser[s.user_name]=(rByUser[s.user_name]||0)+s.total;});
           const rTopProd={};filteredSales.forEach(s=>(s.sale_items||[]).forEach(it=>{rTopProd[it.product_name]=(rTopProd[it.product_name]||0)+it.qty;}));
           const rTopList=Object.entries(rTopProd).sort((a,b)=>b[1]-a[1]).slice(0,10);
+          // Cálculo de ganancia: comparar precio neto con costo de cada item
+          let rCostoTotal=0;
+          filteredSales.forEach(s=>(s.sale_items||[]).forEach(it=>{
+            const prod=products.find(p=>p.id===it.product_id);
+            rCostoTotal+=(prod?prod.cost:0)*it.qty;
+          }));
+          const rGananciaNeta=rNeto-rCostoTotal;
+          const rMargenPct=rNeto>0?(rGananciaNeta/rNeto*100).toFixed(1):0;
           // Ventas por día para gráfico simple
           const rByDay={};filteredSales.forEach(s=>{const day=s.created_at.slice(0,10);rByDay[day]=(rByDay[day]||0)+s.total;});
           const dayList=Object.entries(rByDay).sort((a,b)=>a[0].localeCompare(b[0]));
@@ -429,6 +448,8 @@ export default function POSApp() {
             <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:14}}><div style={{fontSize:10,color:C.textDim,fontWeight:700}}>TOTAL VENTAS</div><div style={{fontSize:28,fontWeight:900,color:C.success}}>{fmt(rTotal)}</div></div>
             <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:14}}><div style={{fontSize:10,color:C.textDim,fontWeight:700}}>NETO</div><div style={{fontSize:22,fontWeight:800,color:C.text}}>{fmt(rNeto)}</div><div style={{fontSize:11,color:C.textDim}}>IVA: {fmt(rIVA)}</div></div>
             <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:14}}><div style={{fontSize:10,color:C.textDim,fontWeight:700}}>TICKET PROMEDIO</div><div style={{fontSize:22,fontWeight:800,color:C.blueLight}}>{filteredSales.length>0?fmt(Math.round(rTotal/filteredSales.length)):"$0"}</div></div>
+            <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:14}}><div style={{fontSize:10,color:C.textDim,fontWeight:700}}>COSTO PRODUCTOS</div><div style={{fontSize:22,fontWeight:800,color:C.danger}}>{fmt(rCostoTotal)}</div></div>
+            <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.accent}`,padding:14}}><div style={{fontSize:10,color:C.textDim,fontWeight:700}}>GANANCIA NETA</div><div style={{fontSize:28,fontWeight:900,color:rGananciaNeta>=0?C.success:C.danger}}>{fmt(rGananciaNeta)}</div><div style={{fontSize:12,color:C.textMuted,marginTop:2}}>Margen: <strong style={{color:C.accent}}>{rMargenPct}%</strong></div></div>
             {rDcto>0&&<div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:14}}><div style={{fontSize:10,color:C.textDim,fontWeight:700}}>DESCUENTOS</div><div style={{fontSize:22,fontWeight:800,color:C.warning}}>-{fmt(rDcto)}</div></div>}
           </div>
 
@@ -494,7 +515,7 @@ export default function POSApp() {
 
       <Modal open={ticketModal} onClose={()=>setTicketModal(false)} title="🧾 TICKET">{lastSale&&<TicketPreview sale={lastSale} storeName={storeName}/>}</Modal>
       <Modal open={!!saleDetailModal} onClose={()=>setSaleDetailModal(null)} title="🧾 DETALLE">{saleDetailModal&&<TicketPreview sale={saleDetailModal} storeName={storeName}/>}</Modal>
-      <Modal open={cierreModal} onClose={()=>setCierreModal(false)} title="📋 CIERRE DE CAJA" wide><CierreCaja sales={sales} storeName={storeName} currentUser={currentUser} onClose={()=>setCierreModal(false)}/></Modal>
+      <Modal open={cierreModal} onClose={()=>setCierreModal(false)} title="📋 CIERRE DE CAJA" wide><CierreCaja sales={sales} products={products} storeName={storeName} currentUser={currentUser} onClose={()=>setCierreModal(false)}/></Modal>
       <Modal open={productModal} onClose={()=>{setProductModal(false);setEditProduct(null);}} title={editProduct?"EDITAR PRODUCTO":"NUEVO PRODUCTO"}><ProductForm product={editProduct} categories={categories} providers={providers} onSave={saveProduct} onCancel={()=>{setProductModal(false);setEditProduct(null);}} saving={saving}/></Modal>
       <Modal open={categoryModal} onClose={()=>{setCategoryModal(false);setEditCategory(null);}} title={editCategory?"EDITAR CATEGORÍA":"NUEVA CATEGORÍA"}><CategoryForm category={editCategory} onSave={saveCategory} onCancel={()=>{setCategoryModal(false);setEditCategory(null);}} saving={saving}/></Modal>
       <Modal open={providerModal} onClose={()=>{setProviderModal(false);setEditProvider(null);}} title={editProvider?"EDITAR PROVEEDOR":"NUEVO PROVEEDOR"}><ProviderForm provider={editProvider} onSave={saveProvider} onCancel={()=>{setProviderModal(false);setEditProvider(null);}} saving={saving}/></Modal>
