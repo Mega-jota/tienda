@@ -114,6 +114,11 @@ export default function POSApp() {
   const [userModal,setUserModal]=useState(false);const [editUser,setEditUser]=useState(null);const [categoryModal,setCategoryModal]=useState(false);const [editCategory,setEditCategory]=useState(null);
   const [configModal,setConfigModal]=useState(false);const [saleDetailModal,setSaleDetailModal]=useState(null);const [saving,setSaving]=useState(false);
   const [cierreModal,setCierreModal]=useState(false);
+  const [prodSearch,setProdSearch]=useState("");
+  const [prodCatFilter,setProdCatFilter]=useState(null);
+  const [reportPeriod,setReportPeriod]=useState("today");
+  const [salesSearch,setSalesSearch]=useState("");
+  const APP_VERSION = "v4.0";
   const searchRef=useRef(null);
 
   useEffect(()=>{loadAllData();},[]);
@@ -218,7 +223,7 @@ export default function POSApp() {
 
   if(loading)return <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Segoe UI',system-ui,sans-serif"}}><div style={{textAlign:"center"}}><div style={{fontSize:48,marginBottom:16}}>🏪</div><div style={{color:C.text,fontSize:20,fontWeight:700}}>Cargando...</div></div></div>;
   if(dbError)return <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Segoe UI',system-ui,sans-serif"}}><div style={{background:C.card,borderRadius:12,padding:32,maxWidth:500,textAlign:"center",border:`2px solid ${C.border}`}}><div style={{fontSize:48,marginBottom:16}}>⚠️</div><h2 style={{color:C.danger,margin:"0 0 12px"}}>Error de Conexión</h2><p style={{color:C.textMuted,fontSize:14}}>{dbError}</p><Btn bg={C.blue} onClick={loadAllData} style={{marginTop:16}}>🔄 Reintentar</Btn></div></div>;
-  if(!currentUser)return <div style={{minHeight:"100vh",background:`linear-gradient(135deg,${C.bg},#0f3460)`,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Segoe UI',system-ui,sans-serif"}}><div style={{background:C.card,borderRadius:16,padding:40,width:"min(400px,90%)",border:`2px solid ${C.border}`}}><div style={{textAlign:"center",marginBottom:32}}><div style={{fontSize:48,marginBottom:12}}>🏪</div><h1 style={{color:C.text,margin:0,fontSize:26,fontWeight:800}}>{storeName}</h1><p style={{color:C.textMuted,margin:"8px 0 0",fontSize:14}}>Punto de Venta</p></div>{loginError&&<div style={{background:C.danger+"33",color:C.accentLight,padding:"10px 14px",borderRadius:8,marginBottom:16,fontSize:13}}>{loginError}</div>}<div style={{marginBottom:16}}><label style={{color:C.textMuted,fontSize:12,fontWeight:600,display:"block",marginBottom:6}}>USUARIO</label><input style={baseInput} value={loginForm.username} onChange={e=>setLoginForm(p=>({...p,username:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleLogin()} placeholder="admin"/></div><div style={{marginBottom:24}}><label style={{color:C.textMuted,fontSize:12,fontWeight:600,display:"block",marginBottom:6}}>CONTRASEÑA</label><input type="password" style={baseInput} value={loginForm.password} onChange={e=>setLoginForm(p=>({...p,password:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleLogin()} placeholder="••••••"/></div><Btn bg={C.accent} hover={C.accentDark} size="lg" onClick={handleLogin} style={{width:"100%",justifyContent:"center"}}>INGRESAR</Btn><div style={{marginTop:16,padding:12,background:C.surface,borderRadius:8,fontSize:11,color:C.textDim}}><div>Administrador | Vendedor</div></div></div></div>;
+  if(!currentUser)return <div style={{minHeight:"100vh",background:`linear-gradient(135deg,${C.bg},#0f3460)`,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Segoe UI',system-ui,sans-serif"}}><div style={{background:C.card,borderRadius:16,padding:40,width:"min(400px,90%)",border:`2px solid ${C.border}`}}><div style={{textAlign:"center",marginBottom:32}}><div style={{fontSize:48,marginBottom:12}}>🏪</div><h1 style={{color:C.text,margin:0,fontSize:26,fontWeight:800}}>{storeName}</h1><p style={{color:C.textMuted,margin:"8px 0 0",fontSize:14}}>Punto de Venta</p></div>{loginError&&<div style={{background:C.danger+"33",color:C.accentLight,padding:"10px 14px",borderRadius:8,marginBottom:16,fontSize:13}}>{loginError}</div>}<div style={{marginBottom:16}}><label style={{color:C.textMuted,fontSize:12,fontWeight:600,display:"block",marginBottom:6}}>USUARIO</label><input style={baseInput} value={loginForm.username} onChange={e=>setLoginForm(p=>({...p,username:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleLogin()} placeholder="admin"/></div><div style={{marginBottom:24}}><label style={{color:C.textMuted,fontSize:12,fontWeight:600,display:"block",marginBottom:6}}>CONTRASEÑA</label><input type="password" style={baseInput} value={loginForm.password} onChange={e=>setLoginForm(p=>({...p,password:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleLogin()} placeholder="••••••"/></div><Btn bg={C.accent} hover={C.accentDark} size="lg" onClick={handleLogin} style={{width:"100%",justifyContent:"center"}}>INGRESAR</Btn><div style={{marginTop:16,padding:12,background:C.surface,borderRadius:8,fontSize:11,color:C.textDim}}><div>admin / admin123 | vendedor / venta123</div></div></div></div>;
 
   const isAdmin=currentUser.role==="admin";
   const tabs=[{id:"pos",label:"💰 CAJA",show:true},{id:"products",label:"📦 PRODUCTOS",show:isAdmin},{id:"categories",label:"🏷️ CATEGORÍAS",show:isAdmin},{id:"providers",label:"🚚 PROVEEDORES",show:isAdmin},{id:"sales",label:"📊 VENTAS",show:true},{id:"users",label:"👥 USUARIOS",show:isAdmin}].filter(t=>t.show);
@@ -234,40 +239,13 @@ export default function POSApp() {
           <span style={{fontWeight:800,fontSize:18,color:C.accent}}>{storeName}</span>
           <div style={{display:"flex",gap:2,marginLeft:8}}>{tabs.map(t=><button key={t.id} onClick={()=>setActiveTab(t.id)} style={{background:activeTab===t.id?C.accent:C.surface,color:"#fff",border:"none",borderRadius:4,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"'Segoe UI',system-ui,sans-serif",letterSpacing:0.5}}>{t.label}</button>)}</div>
         </div>
-        
-        <div style={{display:"flex", alignItems:"center", gap:10}}>
-  {saving&&<Badge bg={C.warning}>GUARDANDO</Badge>}
-  <Badge bg={C.success}>● ONLINE</Badge>
-  <span style={{color:C.textMuted, fontSize:12}}>{currentUser.name}</span>
-  
-  {/* BOTÓN ENGRANAJE - Solo visible para administradores */}
-  {isAdmin && (
-    <button 
-      onClick={() => setConfigModal(true)}
-      style={{
-        background: "transparent",
-        border: "none",
-        fontSize: 20,
-        cursor: "pointer",
-        color: C.textMuted,
-        padding: "4px 8px",
-        borderRadius: 6,
-        transition: "all 0.2s",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center"
-      }}
-      onMouseEnter={(e) => e.currentTarget.style.background = C.surface}
-      onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
-      title="Configuración del negocio"
-    >
-      ⚙️
-    </button>
-  )}
-  
-  <Btn bg={C.danger} size="sm" onClick={()=>{setCurrentUser(null); setCart([]); setDiscountPercent(0);}}>SALIR</Btn>
-</div>
-        
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          {saving&&<Badge bg={C.warning}>GUARDANDO</Badge>}
+          <Badge bg={C.success}>● ONLINE</Badge>
+          <Badge bg={C.surface}>{APP_VERSION}</Badge>
+          <span style={{color:C.textMuted,fontSize:12}}>{currentUser.name}</span>
+          <Btn bg={C.danger} size="sm" onClick={()=>{setCurrentUser(null);setCart([]);setDiscountPercent(0);}}>SALIR</Btn>
+        </div>
       </div>
 
       <div style={{padding:16,maxWidth:1500,margin:"0 auto"}}>
@@ -370,10 +348,25 @@ export default function POSApp() {
         </div>}
 
         {activeTab==="products"&&<div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><h2 style={{margin:0,fontSize:20}}>📦 Inventario</h2><Btn bg={C.blue} hover={C.blueDark} onClick={()=>{setEditProduct(null);setProductModal(true);}}>+ NUEVO</Btn></div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}><h2 style={{margin:0,fontSize:20}}>📦 Inventario ({products.length} productos)</h2><Btn bg={C.blue} hover={C.blueDark} onClick={()=>{setEditProduct(null);setProductModal(true);}}>+ NUEVO</Btn></div>
+          {/* BARRA DE BÚSQUEDA Y FILTROS */}
+          <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:12,marginBottom:12,display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+            <div style={{position:"relative",flex:1,minWidth:220}}>
+              <input style={{...baseInput,paddingLeft:36,fontSize:14}} placeholder="🔍 Buscar por código o nombre..." value={prodSearch} onChange={e=>setProdSearch(e.target.value)}/>
+              {prodSearch&&<button onClick={()=>setProdSearch("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.textMuted,fontSize:16,cursor:"pointer"}}>✕</button>}
+            </div>
+            <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+              <button onClick={()=>setProdCatFilter(null)} style={{background:!prodCatFilter?C.accent:C.surface,color:"#fff",border:`1px solid ${!prodCatFilter?C.accent:C.border}`,borderRadius:4,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Segoe UI',system-ui,sans-serif"}}>TODOS</button>
+              {categories.map(c=><button key={c.id} onClick={()=>setProdCatFilter(prodCatFilter===c.id?null:c.id)} style={{background:prodCatFilter===c.id?C.accent:C.surface,color:"#fff",border:`1px solid ${prodCatFilter===c.id?C.accent:C.border}`,borderRadius:4,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Segoe UI',system-ui,sans-serif"}}>{c.name} ({products.filter(p=>p.category_id===c.id).length})</button>)}
+            </div>
+          </div>
+          {(()=>{const filtered=products.filter(p=>{const matchSearch=!prodSearch||p.name.toLowerCase().includes(prodSearch.toLowerCase())||p.code.includes(prodSearch);const matchCat=!prodCatFilter||p.category_id===prodCatFilter;return matchSearch&&matchCat;});return <>
+          {prodSearch||prodCatFilter?<div style={{color:C.textMuted,fontSize:12,marginBottom:8}}>{filtered.length} producto{filtered.length!==1?"s":""} encontrado{filtered.length!==1?"s":""}{prodCatFilter?` en ${categories.find(c=>c.id===prodCatFilter)?.name||""}`:""}{prodSearch?` para "${prodSearch}"`:""}</div>:null}
           <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,overflow:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",minWidth:800}}><thead><tr style={{background:C.surface}}>{["Código","Producto","Categoría","Proveedor","Costo","Precio","Margen","Stock",""].map(h=><th key={h} style={{padding:"10px 12px",textAlign:"left",fontSize:11,color:C.textMuted,fontWeight:700}}>{h}</th>)}</tr></thead><tbody>
-          {products.map(p=>{const cat=categories.find(c=>c.id===p.category_id);const prov=providers.find(pr=>pr.id===p.provider_id);const margin=p.price>0?((p.price-p.cost)/p.price*100).toFixed(0):0;return <tr key={p.id} style={{borderBottom:`1px solid ${C.border}22`}}><td style={{padding:"8px 12px",fontSize:12,fontFamily:"monospace"}}>{p.code}</td><td style={{padding:"8px 12px",fontSize:13,fontWeight:600}}>{p.name}</td><td style={{padding:"8px 12px"}}><Badge bg={C.blue}>{cat?.name||"—"}</Badge></td><td style={{padding:"8px 12px",fontSize:12,color:C.textMuted}}>{prov?.name||"—"}</td><td style={{padding:"8px 12px"}}>{fmt(p.cost)}</td><td style={{padding:"8px 12px",fontWeight:700}}>{fmt(p.price)}</td><td style={{padding:"8px 12px"}}><Badge bg={parseInt(margin)>=30?C.success:C.warning}>{margin}%</Badge></td><td style={{padding:"8px 12px"}}><Badge bg={p.stock<=0?C.danger:p.stock<=p.min_stock?C.warning:C.success}>{p.stock}/{p.min_stock}</Badge></td><td style={{padding:"8px 12px"}}><div style={{display:"flex",gap:4}}><Btn bg={C.surface} hover={C.surfaceLight} size="sm" onClick={()=>{setEditProduct(p);setProductModal(true);}}>✏️</Btn><Btn bg={C.danger} size="sm" onClick={()=>deleteProduct(p.id)}>🗑️</Btn></div></td></tr>;})}
-          </tbody></table></div></div>}
+          {filtered.length===0?<tr><td colSpan={9} style={{padding:40,textAlign:"center",color:C.textDim}}>No se encontraron productos</td></tr>
+          :filtered.map(p=>{const cat=categories.find(c=>c.id===p.category_id);const prov=providers.find(pr=>pr.id===p.provider_id);const margin=p.price>0?((p.price-p.cost)/p.price*100).toFixed(0):0;return <tr key={p.id} style={{borderBottom:`1px solid ${C.border}22`}}><td style={{padding:"8px 12px",fontSize:12,fontFamily:"monospace"}}>{p.code}</td><td style={{padding:"8px 12px",fontSize:13,fontWeight:600}}>{p.name}</td><td style={{padding:"8px 12px"}}><Badge bg={C.blue}>{cat?.name||"—"}</Badge></td><td style={{padding:"8px 12px",fontSize:12,color:C.textMuted}}>{prov?.name||"—"}</td><td style={{padding:"8px 12px"}}>{fmt(p.cost)}</td><td style={{padding:"8px 12px",fontWeight:700}}>{fmt(p.price)}</td><td style={{padding:"8px 12px"}}><Badge bg={parseInt(margin)>=30?C.success:C.warning}>{margin}%</Badge></td><td style={{padding:"8px 12px"}}><Badge bg={p.stock<=0?C.danger:p.stock<=p.min_stock?C.warning:C.success}>{p.stock}/{p.min_stock}</Badge></td><td style={{padding:"8px 12px"}}><div style={{display:"flex",gap:4}}><Btn bg={C.surface} hover={C.surfaceLight} size="sm" onClick={()=>{setEditProduct(p);setProductModal(true);}}>✏️</Btn><Btn bg={C.danger} size="sm" onClick={()=>deleteProduct(p.id)}>🗑️</Btn></div></td></tr>;})}
+          </tbody></table></div></>})()}
+        </div>}
 
         {activeTab==="categories"&&<div>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><h2 style={{margin:0,fontSize:20}}>🏷️ Categorías</h2><Btn bg={C.blue} hover={C.blueDark} onClick={()=>{setEditCategory(null);setCategoryModal(true);}}>+ NUEVA</Btn></div>
@@ -383,12 +376,107 @@ export default function POSApp() {
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><h2 style={{margin:0,fontSize:20}}>🚚 Proveedores</h2><Btn bg={C.blue} hover={C.blueDark} onClick={()=>{setEditProvider(null);setProviderModal(true);}}>+ NUEVO</Btn></div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:12}}>{providers.map(p=>{const pc=products.filter(pr=>pr.provider_id===p.id).length;return <div key={p.id} style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:16}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div><div style={{fontSize:15,fontWeight:700}}>{p.name}</div><div style={{fontSize:11,color:C.textDim,fontFamily:"monospace"}}>RUT: {p.rut}</div></div><Badge bg={C.blue}>{pc}</Badge></div><div style={{fontSize:12,color:C.textMuted,lineHeight:1.6}}>📞 {p.phone} | 📧 {p.email}<br/>📍 {p.address}</div><div style={{display:"flex",gap:6,marginTop:10}}><Btn bg={C.surface} hover={C.surfaceLight} size="sm" onClick={()=>{setEditProvider(p);setProviderModal(true);}}>✏️</Btn><Btn bg={C.danger} size="sm" onClick={()=>deleteProvider(p.id)}>🗑️</Btn></div></div>;})}</div></div>}
 
-        {activeTab==="sales"&&<div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><h2 style={{margin:0,fontSize:20}}>📊 Historial</h2><div style={{display:"flex",gap:8}}><Btn bg={C.green} hover={C.greenDark} onClick={()=>setCierreModal(true)}>📋 CIERRE DE CAJA</Btn><Btn bg={C.surface} hover={C.surfaceLight} onClick={loadAllData}>🔄</Btn></div></div>
-          {sales.length===0?<div style={{textAlign:"center",padding:60,background:C.card,borderRadius:8}}><div style={{fontSize:40,marginBottom:8}}>📋</div><div style={{color:C.textMuted}}>Sin ventas</div></div>
-          :<div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,overflow:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",minWidth:700}}><thead><tr style={{background:C.surface}}>{["N°","Fecha","Cajero","Items","Dcto","Total","Pago",""].map(h=><th key={h} style={{padding:"10px 12px",textAlign:"left",fontSize:11,color:C.textMuted,fontWeight:700}}>{h}</th>)}</tr></thead><tbody>
-          {sales.map(s=><tr key={s.id} style={{borderBottom:`1px solid ${C.border}22`}}><td style={{padding:"8px 12px",fontFamily:"monospace",fontWeight:700}}>#{s.sale_number}</td><td style={{padding:"8px 12px",fontSize:12,color:C.textMuted}}>{fmtDate(s.created_at)}</td><td style={{padding:"8px 12px",fontSize:13}}>{s.user_name}</td><td style={{padding:"8px 12px"}}>{(s.sale_items||[]).length}</td><td style={{padding:"8px 12px"}}>{s.discount_percent>0?<Badge bg={C.warning}>{s.discount_percent}%</Badge>:"—"}</td><td style={{padding:"8px 12px",fontSize:15,fontWeight:800,color:C.success}}>{fmt(s.total)}</td><td style={{padding:"8px 12px"}}><Badge bg={s.payment==="cash"?C.success:s.payment==="debit"?C.blue:C.warning}>{s.payment==="cash"?"Efectivo":s.payment==="debit"?"Débito":s.payment==="credit"?"Crédito":"Transfer."}</Badge></td><td style={{padding:"8px 12px"}}><Btn bg={C.surface} hover={C.surfaceLight} size="sm" onClick={()=>setSaleDetailModal(s)}>🧾</Btn></td></tr>)}
-          </tbody></table></div>}</div>}
+        {activeTab==="sales"&&(()=>{
+          // Calcular períodos
+          const now=new Date();const todayS=todayStr();
+          const weekAgo=new Date(now);weekAgo.setDate(weekAgo.getDate()-7);
+          const monthAgo=new Date(now);monthAgo.setMonth(monthAgo.getMonth()-1);
+          const periodLabel={today:"Hoy",week:"Últimos 7 días",month:"Último mes",all:"Todo"};
+          const filteredSales=sales.filter(s=>{
+            if(!s.created_at)return false;
+            const d=new Date(s.created_at);
+            if(reportPeriod==="today")return s.created_at.startsWith(todayS);
+            if(reportPeriod==="week")return d>=weekAgo;
+            if(reportPeriod==="month")return d>=monthAgo;
+            return true;
+          }).filter(s=>{
+            if(!salesSearch)return true;
+            const q=salesSearch.toLowerCase();
+            return s.sale_number.includes(q)||s.user_name.toLowerCase().includes(q)||(s.sale_items||[]).some(it=>it.product_name.toLowerCase().includes(q));
+          });
+          const rTotal=filteredSales.reduce((s,v)=>s+v.total,0);
+          const rNeto=filteredSales.reduce((s,v)=>s+v.subtotal,0);
+          const rIVA=filteredSales.reduce((s,v)=>s+v.iva,0);
+          const rDcto=filteredSales.reduce((s,v)=>s+(v.discount_amount||0),0);
+          const rByPay={cash:0,debit:0,credit:0,transfer:0};
+          filteredSales.forEach(s=>{rByPay[s.payment]=(rByPay[s.payment]||0)+s.total;});
+          const rByUser={};filteredSales.forEach(s=>{rByUser[s.user_name]=(rByUser[s.user_name]||0)+s.total;});
+          const rTopProd={};filteredSales.forEach(s=>(s.sale_items||[]).forEach(it=>{rTopProd[it.product_name]=(rTopProd[it.product_name]||0)+it.qty;}));
+          const rTopList=Object.entries(rTopProd).sort((a,b)=>b[1]-a[1]).slice(0,10);
+          // Ventas por día para gráfico simple
+          const rByDay={};filteredSales.forEach(s=>{const day=s.created_at.slice(0,10);rByDay[day]=(rByDay[day]||0)+s.total;});
+          const dayList=Object.entries(rByDay).sort((a,b)=>a[0].localeCompare(b[0]));
+          const maxDay=Math.max(...dayList.map(d=>d[1]),1);
+
+          return <div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:8}}>
+            <h2 style={{margin:0,fontSize:20}}>📊 Reportes de Ventas</h2>
+            <div style={{display:"flex",gap:6}}>
+              <Btn bg={C.green} hover={C.greenDark} onClick={()=>setCierreModal(true)}>📋 CIERRE DE CAJA</Btn>
+              <Btn bg={C.surface} hover={C.surfaceLight} onClick={loadAllData}>🔄</Btn>
+            </div>
+          </div>
+
+          {/* Filtros de período */}
+          <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap",alignItems:"center"}}>
+            {[["today","📅 HOY"],["week","📆 SEMANA"],["month","🗓️ MES"],["all","📚 TODO"]].map(([v,l])=><button key={v} onClick={()=>setReportPeriod(v)} style={{background:reportPeriod===v?C.accent:C.surface,color:"#fff",border:`2px solid ${reportPeriod===v?C.accent:C.border}`,borderRadius:6,padding:"8px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Segoe UI',system-ui,sans-serif"}}>{l}</button>)}
+            <div style={{flex:1,minWidth:180}}><input style={{...baseInput,fontSize:13}} placeholder="🔍 Buscar boleta, cajero o producto..." value={salesSearch} onChange={e=>setSalesSearch(e.target.value)}/></div>
+          </div>
+
+          {/* Tarjetas resumen */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10,marginBottom:12}}>
+            <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:14}}><div style={{fontSize:10,color:C.textDim,fontWeight:700}}>BOLETAS ({periodLabel[reportPeriod]})</div><div style={{fontSize:28,fontWeight:900,color:C.text}}>{filteredSales.length}</div></div>
+            <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:14}}><div style={{fontSize:10,color:C.textDim,fontWeight:700}}>TOTAL VENTAS</div><div style={{fontSize:28,fontWeight:900,color:C.success}}>{fmt(rTotal)}</div></div>
+            <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:14}}><div style={{fontSize:10,color:C.textDim,fontWeight:700}}>NETO</div><div style={{fontSize:22,fontWeight:800,color:C.text}}>{fmt(rNeto)}</div><div style={{fontSize:11,color:C.textDim}}>IVA: {fmt(rIVA)}</div></div>
+            <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:14}}><div style={{fontSize:10,color:C.textDim,fontWeight:700}}>TICKET PROMEDIO</div><div style={{fontSize:22,fontWeight:800,color:C.blueLight}}>{filteredSales.length>0?fmt(Math.round(rTotal/filteredSales.length)):"$0"}</div></div>
+            {rDcto>0&&<div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:14}}><div style={{fontSize:10,color:C.textDim,fontWeight:700}}>DESCUENTOS</div><div style={{fontSize:22,fontWeight:800,color:C.warning}}>-{fmt(rDcto)}</div></div>}
+          </div>
+
+          <div style={{display:"flex",gap:12,marginBottom:12,flexWrap:"wrap"}}>
+            {/* Desglose por medio de pago */}
+            <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:14,minWidth:200,flex:1}}>
+              <div style={{fontSize:11,color:C.textDim,fontWeight:700,marginBottom:10}}>POR MEDIO DE PAGO</div>
+              {[["cash","Efectivo",C.success],["debit","Débito",C.blue],["credit","Crédito",C.warning],["transfer","Transferencia",C.teal]].map(([k,l,c])=><div key={k} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:10,height:10,borderRadius:2,background:c}}/><span style={{fontSize:13}}>{l}</span></div>
+                <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{height:6,borderRadius:3,background:c,width:Math.max(4,rByPay[k]/Math.max(rTotal,1)*120),transition:"width 0.3s"}}/><span style={{fontSize:13,fontWeight:700,minWidth:80,textAlign:"right"}}>{fmt(rByPay[k])}</span></div>
+              </div>)}
+            </div>
+            {/* Por cajero */}
+            <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:14,minWidth:200,flex:1}}>
+              <div style={{fontSize:11,color:C.textDim,fontWeight:700,marginBottom:10}}>POR CAJERO</div>
+              {Object.entries(rByUser).sort((a,b)=>b[1]-a[1]).map(([name,total])=><div key={name} style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{fontSize:13}}>{name}</span><span style={{fontSize:13,fontWeight:700}}>{fmt(total)}</span></div>)}
+              {Object.keys(rByUser).length===0&&<div style={{color:C.textDim,fontSize:12}}>Sin datos</div>}
+            </div>
+            {/* Top productos */}
+            <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:14,minWidth:240,flex:1}}>
+              <div style={{fontSize:11,color:C.textDim,fontWeight:700,marginBottom:10}}>TOP PRODUCTOS</div>
+              {rTopList.map(([name,qty],i)=><div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                <span style={{fontSize:12,color:i<3?C.text:C.textMuted}}><strong style={{color:C.accent,marginRight:6}}>#{i+1}</strong>{name}</span><Badge bg={i<3?C.accent:C.surface}>{qty} und</Badge>
+              </div>)}
+              {rTopList.length===0&&<div style={{color:C.textDim,fontSize:12}}>Sin datos</div>}
+            </div>
+          </div>
+
+          {/* Gráfico de ventas por día */}
+          {dayList.length>1&&<div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:14,marginBottom:12}}>
+            <div style={{fontSize:11,color:C.textDim,fontWeight:700,marginBottom:10}}>VENTAS POR DÍA</div>
+            <div style={{display:"flex",alignItems:"flex-end",gap:3,height:100}}>
+              {dayList.map(([day,total])=><div key={day} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                <span style={{fontSize:9,color:C.textMuted}}>{fmt(total)}</span>
+                <div style={{width:"100%",background:C.accent,borderRadius:"3px 3px 0 0",height:Math.max(4,total/maxDay*80),transition:"height 0.3s"}}/>
+                <span style={{fontSize:9,color:C.textDim,transform:"rotate(-45deg)",transformOrigin:"top left",whiteSpace:"nowrap"}}>{day.slice(5)}</span>
+              </div>)}
+            </div>
+          </div>}
+
+          {/* Tabla de ventas */}
+          <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,overflow:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",minWidth:700}}><thead><tr style={{background:C.surface}}>{["N°","Fecha","Cajero","Items","Dcto","Total","Pago",""].map(h=><th key={h} style={{padding:"10px 12px",textAlign:"left",fontSize:11,color:C.textMuted,fontWeight:700}}>{h}</th>)}</tr></thead><tbody>
+            {filteredSales.length===0?<tr><td colSpan={8} style={{padding:30,textAlign:"center",color:C.textDim}}>Sin ventas en este período</td></tr>
+            :filteredSales.map(s=><tr key={s.id} style={{borderBottom:`1px solid ${C.border}22`}}><td style={{padding:"8px 12px",fontFamily:"monospace",fontWeight:700}}>#{s.sale_number}</td><td style={{padding:"8px 12px",fontSize:12,color:C.textMuted}}>{fmtDate(s.created_at)}</td><td style={{padding:"8px 12px",fontSize:13}}>{s.user_name}</td><td style={{padding:"8px 12px"}}>{(s.sale_items||[]).length}</td><td style={{padding:"8px 12px"}}>{s.discount_percent>0?<Badge bg={C.warning}>{s.discount_percent}%</Badge>:"—"}</td><td style={{padding:"8px 12px",fontSize:15,fontWeight:800,color:C.success}}>{fmt(s.total)}</td><td style={{padding:"8px 12px"}}><Badge bg={s.payment==="cash"?C.success:s.payment==="debit"?C.blue:C.warning}>{s.payment==="cash"?"Efectivo":s.payment==="debit"?"Débito":s.payment==="credit"?"Crédito":"Transfer."}</Badge></td><td style={{padding:"8px 12px"}}><Btn bg={C.surface} hover={C.surfaceLight} size="sm" onClick={()=>setSaleDetailModal(s)}>🧾</Btn></td></tr>)}
+            </tbody></table>
+          </div>
+        </div>})()}
 
         {activeTab==="users"&&<div>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><h2 style={{margin:0,fontSize:20}}>👥 Usuarios</h2><Btn bg={C.blue} hover={C.blueDark} onClick={()=>{setEditUser(null);setUserModal(true);}}>+ NUEVO</Btn></div>
@@ -411,7 +499,7 @@ export default function POSApp() {
       <Modal open={categoryModal} onClose={()=>{setCategoryModal(false);setEditCategory(null);}} title={editCategory?"EDITAR CATEGORÍA":"NUEVA CATEGORÍA"}><CategoryForm category={editCategory} onSave={saveCategory} onCancel={()=>{setCategoryModal(false);setEditCategory(null);}} saving={saving}/></Modal>
       <Modal open={providerModal} onClose={()=>{setProviderModal(false);setEditProvider(null);}} title={editProvider?"EDITAR PROVEEDOR":"NUEVO PROVEEDOR"}><ProviderForm provider={editProvider} onSave={saveProvider} onCancel={()=>{setProviderModal(false);setEditProvider(null);}} saving={saving}/></Modal>
       <Modal open={userModal} onClose={()=>{setUserModal(false);setEditUser(null);}} title={editUser?"EDITAR USUARIO":"NUEVO USUARIO"}><UserForm user={editUser} onSave={saveUser} onCancel={()=>{setUserModal(false);setEditUser(null);}} saving={saving}/></Modal>
-      <Modal open={configModal} onClose={()=>setConfigModal(false)} title="⚙️ CONFIGURACIÓN"><div style={{marginBottom:16}}><label style={{color:C.textMuted,fontSize:11,fontWeight:700,display:"block",marginBottom:6}}>NOMBRE DEL NEGOCIO</label><input style={baseInput} value={storeName} onChange={e=>updateStoreName(e.target.value)}/></div></Modal>
+      <Modal open={configModal} onClose={()=>setConfigModal(false)} title="⚙️ CONFIGURACIÓN"><div style={{marginBottom:16}}><label style={{color:C.textMuted,fontSize:11,fontWeight:700,display:"block",marginBottom:6}}>NOMBRE DEL NEGOCIO</label><input style={baseInput} value={storeName} onChange={e=>updateStoreName(e.target.value)}/></div><div style={{padding:14,background:C.surface,borderRadius:8,fontSize:12,color:C.textMuted,lineHeight:1.8}}><div style={{fontWeight:700,color:C.text,marginBottom:4}}>ℹ️ SISTEMA POS</div><div>Versión: <strong style={{color:C.accent}}>{APP_VERSION}</strong></div><div>☁️ Base de datos: Supabase (nube)</div><div>Los datos son permanentes y seguros.</div><div>IVA: 19% (Chile)</div></div></Modal>
     </div>
   );
 }
