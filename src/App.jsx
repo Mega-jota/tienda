@@ -129,7 +129,7 @@ export default function POSApp() {
   const [prodCatFilter,setProdCatFilter]=useState(null);
   const [reportPeriod,setReportPeriod]=useState("today");
   const [salesSearch,setSalesSearch]=useState("");
-  const APP_VERSION = "v4.1";
+  const APP_VERSION = "v4.2";
   const searchRef=useRef(null);
 
   useEffect(()=>{loadAllData();},[]);
@@ -175,13 +175,51 @@ export default function POSApp() {
   const deleteUser=async(id)=>{if(id===currentUser.id)return;if(!confirm("¿Eliminar?"))return;await supabase.from("users").delete().eq("id",id);setUsers(p=>p.filter(x=>x.id!==id));};
   const updateStoreName=async(n)=>{setStoreName(n);await supabase.from("config").upsert({key:"store_name",value:n});};
 
-  // BÚSQUEDA tipo POS
+  // BÚSQUEDA tipo POS - compatible con pistola de código de barras
+  // La pistola escribe muy rápido y envía Enter al final.
+  // React state puede no estar sincronizado, así que al presionar Enter
+  // leemos el valor directo del DOM y buscamos coincidencia exacta por código.
+  const barcodeBuffer = useRef("");
+  const barcodeTimer = useRef(null);
+
   useEffect(()=>{
     if(!searchTerm.trim()){setSearchResults([]);setShowResults(false);return;}
     const q=searchTerm.toLowerCase();
-    const res=products.filter(p=>p.name.toLowerCase().includes(q)||p.code.includes(q)).slice(0,8);
+    // Priorizar coincidencia exacta de código
+    const exact=products.filter(p=>p.code===searchTerm);
+    if(exact.length>0){setSearchResults(exact);setShowResults(true);return;}
+    // Luego códigos que empiecen con el texto, luego nombres
+    const byCode=products.filter(p=>p.code.startsWith(searchTerm));
+    const byName=products.filter(p=>p.name.toLowerCase().includes(q)&&!byCode.includes(p));
+    const res=[...byCode,...byName].slice(0,8);
     setSearchResults(res);setShowResults(res.length>0);
   },[searchTerm,products]);
+
+  const handleSearchKeyDown = (e) => {
+    if(e.key==="Enter"){
+      e.preventDefault();
+      // Leer valor directo del input (no del state, que puede estar atrasado)
+      const rawValue = searchRef.current ? searchRef.current.value.trim() : searchTerm.trim();
+      if(!rawValue)return;
+      // 1. Buscar coincidencia EXACTA por código de barras
+      const exactMatch = products.find(p => p.code === rawValue);
+      if(exactMatch){
+        addToCart(exactMatch, parseInt(qtyInput)||1);
+        return;
+      }
+      // 2. Buscar código que empiece con el valor
+      const startMatch = products.find(p => p.code.startsWith(rawValue));
+      if(startMatch){
+        addToCart(startMatch, parseInt(qtyInput)||1);
+        return;
+      }
+      // 3. Fallback: primer resultado de búsqueda
+      if(searchResults.length>0){
+        addToCart(searchResults[0], parseInt(qtyInput)||1);
+      }
+    }
+    if(e.key==="Escape"){setSearchTerm("");setShowResults(false);}
+  };
 
   const addToCart=(product,qty)=>{
     if(product.stock<=0)return;
@@ -310,7 +348,7 @@ export default function POSApp() {
                 <div style={{display:"flex",gap:8,alignItems:"center",position:"relative"}}>
                   <div style={{flex:1,position:"relative"}}>
                     <input ref={searchRef} style={{...baseInput,fontSize:18,padding:"12px 16px",fontWeight:600}} placeholder="[F2] Código o nombre del producto..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)}
-                      onKeyDown={e=>{if(e.key==="Enter"&&searchResults.length>0){addToCart(searchResults[0],parseInt(qtyInput)||1);}if(e.key==="Escape"){setSearchTerm("");setShowResults(false);}}}/>
+                      onKeyDown={handleSearchKeyDown}/>
                     {showResults&&<div style={{position:"absolute",bottom:"100%",left:0,right:0,background:C.card,border:`2px solid ${C.accent}`,borderRadius:8,marginBottom:4,maxHeight:250,overflowY:"auto",zIndex:50}}>
                       {searchResults.map(p=><div key={p.id} onClick={()=>addToCart(p,parseInt(qtyInput)||1)} style={{padding:"10px 14px",cursor:"pointer",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}} onMouseEnter={e=>e.currentTarget.style.background=C.surface} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                         <div><span style={{fontFamily:"monospace",fontSize:12,color:C.textDim,marginRight:12}}>{p.code}</span><span style={{fontWeight:600}}>{p.name}</span></div>
