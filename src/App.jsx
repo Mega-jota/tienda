@@ -137,10 +137,13 @@ export default function POSApp() {
   const [quoteClient,setQuoteClient]=useState({name:"",rut:"",phone:""});
   const [quoteDiscount,setQuoteDiscount]=useState(0);
   const [quotePreview,setQuotePreview]=useState(null);
+  const [savedQuotes,setSavedQuotes]=useState([]);
+  const [quoteView,setQuoteView]=useState("new");// new | history
+  const [viewingQuote,setViewingQuote]=useState(null);
   const [storeRut,setStoreRut]=useState("");
   const [storeAddress,setStoreAddress]=useState("");
   const [storePhone,setStorePhone]=useState("");
-  const APP_VERSION = "v5.3";
+  const APP_VERSION = "v5.4";
   const searchRef=useRef(null);
 
   useEffect(()=>{loadAllData();},[]);
@@ -159,16 +162,17 @@ export default function POSApp() {
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const [catRes,provRes,prodRes,userRes,salesRes,configRes] = await Promise.all([
+      const [catRes,provRes,prodRes,userRes,salesRes,configRes,quotesRes] = await Promise.all([
         supabase.from("categories").select("*").order("id"),
         supabase.from("providers").select("*").order("id"),
         supabase.from("products").select("*").order("id"),
         supabase.from("users").select("*").order("id"),
         supabase.from("sales").select("*, sale_items(*)").order("id",{ascending:false}).limit(500),
         supabase.from("config").select("*"),
+        supabase.from("quotes").select("*, quote_items(*)").order("id",{ascending:false}).limit(200),
       ]);
       if(catRes.error) throw catRes.error;
-      setCategories(catRes.data||[]);setProviders(provRes.data||[]);setProducts(prodRes.data||[]);setUsers(userRes.data||[]);setSales(salesRes.data||[]);
+      setCategories(catRes.data||[]);setProviders(provRes.data||[]);setProducts(prodRes.data||[]);setUsers(userRes.data||[]);setSales(salesRes.data||[]);setSavedQuotes(quotesRes.data||[]);
       const sc=(configRes.data||[]).find(c=>c.key==="store_name");if(sc)setStoreName(sc.value);
       const sr=(configRes.data||[]).find(c=>c.key==="store_rut");if(sr)setStoreRut(sr.value);
       const sa=(configRes.data||[]).find(c=>c.key==="store_address");if(sa)setStoreAddress(sa.value);
@@ -198,6 +202,45 @@ export default function POSApp() {
   },[quoteSearch,products]);
   const addToQuote=(p)=>{setQuoteCart(prev=>{const ex=prev.find(c=>c.product_id===p.id);if(ex)return prev.map(c=>c.product_id===p.id?{...c,qty:c.qty+1}:c);return[...prev,{product_id:p.id,product_name:p.name,price:p.price,qty:1}];});setQuoteSearch("");};
   const lowStockProducts=products.filter(p=>p.stock<=p.min_stock);
+
+  // Guardar cotización en Supabase
+  const saveQuote=async(quoteData)=>{
+    setSaving(true);
+    try{
+      const countRes=await supabase.from("quotes").select("id",{count:"exact",head:true});
+      const qn="COT-"+String((countRes.count||0)+1).padStart(5,"0");
+      const{data:qd,error:qe}=await supabase.from("quotes").insert({
+        quote_number:qn,user_id:currentUser.id,user_name:currentUser.name,
+        client_name:quoteData.client.name,client_rut:quoteData.client.rut,client_phone:quoteData.client.phone,
+        subtotal_bruto:quoteData.bruto,discount_percent:quoteData.discount,discount_amount:quoteData.dcto,
+        subtotal:quoteData.neto,iva:quoteData.iva,total:quoteData.total,status:"pending",
+      }).select().single();
+      if(qe)throw qe;
+      const items=quoteData.items.map(it=>({quote_id:qd.id,product_id:it.product_id,product_name:it.product_name,price:it.price,qty:it.qty}));
+      await supabase.from("quote_items").insert(items);
+      const saved={...qd,quote_items:items};
+      setSavedQuotes(p=>[saved,...p]);
+      return saved;
+    }catch(e){alert("Error guardando cotización: "+e.message);return null;}
+    finally{setSaving(false);}
+  };
+
+  // Cambiar estado de cotización
+  const updateQuoteStatus=async(id,status)=>{
+    await supabase.from("quotes").update({status}).eq("id",id);
+    setSavedQuotes(p=>p.map(q=>q.id===id?{...q,status}:q));
+  };
+
+  // Cargar cotización aceptada al carro de venta
+  const loadQuoteToSale=(quote)=>{
+    const items=(quote.quote_items||[]).map(it=>{
+      const prod=products.find(p=>p.id===it.product_id);
+      return {product_id:it.product_id,product_name:it.product_name,price:it.price,qty:it.qty,maxStock:prod?prod.stock:9999};
+    });
+    setCart(items);
+    if(quote.discount_percent>0)setDiscountPercent(quote.discount_percent);
+    setActiveTab("pos");
+  };
 
   // BÚSQUEDA tipo POS - compatible con pistola de código de barras
   // La pistola escribe muy rápido y envía Enter al final.
@@ -460,94 +503,111 @@ export default function POSApp() {
 
         {/* ═══ COTIZACIONES ═══ */}
         {activeTab==="quotes"&&<div>
-          {quotePreview?<QuotePreview quote={quotePreview} storeName={storeName} storeRut={storeRut} storeAddress={storeAddress} storePhone={storePhone} onBack={()=>setQuotePreview(null)} onClose={()=>{setQuotePreview(null);setQuoteCart([]);setQuoteClient({name:"",rut:"",phone:""});setQuoteDiscount(0);}}/>
+          {viewingQuote?<QuotePreview quote={viewingQuote} storeName={storeName} storeRut={storeRut} storeAddress={storeAddress} storePhone={storePhone} onBack={()=>setViewingQuote(null)} onClose={()=>setViewingQuote(null)}/>
+          :quotePreview?<QuotePreview quote={quotePreview} storeName={storeName} storeRut={storeRut} storeAddress={storeAddress} storePhone={storePhone} onBack={()=>setQuotePreview(null)} onClose={()=>{setQuotePreview(null);setQuoteCart([]);setQuoteClient({name:"",rut:"",phone:""});setQuoteDiscount(0);}} onSave={async()=>{const saved=await saveQuote(quotePreview);if(saved){setQuotePreview(null);setQuoteCart([]);setQuoteClient({name:"",rut:"",phone:""});setQuoteDiscount(0);setQuoteView("history");}}} saving={saving}/>
           :<div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}><h2 style={{margin:0,fontSize:20}}>📄 Cotizaciones</h2>
-              <div style={{display:"flex",gap:8}}>
-                <Btn bg={C.danger} hover="#b71c1c" onClick={()=>{setQuoteCart([]);setQuoteDiscount(0);setQuoteClient({name:"",rut:"",phone:""});}}>🗑️ LIMPIAR TODO</Btn>
-                {quoteCart.length>0&&<Btn bg={C.teal} hover="#009b7d" onClick={()=>{const bruto=quoteCart.reduce((s,c)=>s+c.price*c.qty,0);const dcto=Math.round(bruto*quoteDiscount/100);const total=bruto-dcto;const neto=Math.round(total/1.19);const iva=total-neto;setQuotePreview({items:quoteCart,client:quoteClient,bruto,dcto,total,neto,iva,discount:quoteDiscount,date:new Date().toISOString()});}}>📄 GENERAR COTIZACIÓN</Btn>}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:8}}>
+              <h2 style={{margin:0,fontSize:20}}>📄 Cotizaciones</h2>
+              <div style={{display:"flex",gap:4}}>
+                <button onClick={()=>setQuoteView("new")} style={{background:quoteView==="new"?C.teal:C.surface,color:"#fff",border:"none",borderRadius:4,padding:"8px 16px",fontSize:12,fontWeight:700,cursor:"pointer"}}>+ NUEVA</button>
+                <button onClick={()=>setQuoteView("history")} style={{background:quoteView==="history"?C.teal:C.surface,color:"#fff",border:"none",borderRadius:4,padding:"8px 16px",fontSize:12,fontWeight:700,cursor:"pointer"}}>📋 HISTORIAL ({savedQuotes.length})</button>
               </div>
             </div>
 
-            <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
-              {/* Columna izquierda: cliente + búsqueda + tabla */}
-              <div style={{flex:1,minWidth:400}}>
-                {/* Datos cliente */}
-                <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:14,marginBottom:12}}>
-                  <div style={{fontSize:11,color:C.textDim,fontWeight:700,marginBottom:8}}>DATOS DEL CLIENTE (opcional)</div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-                    <div><label style={{color:C.textMuted,fontSize:10,fontWeight:700,display:"block",marginBottom:3}}>NOMBRE</label><input style={baseInput} value={quoteClient.name} onChange={e=>setQuoteClient(p=>({...p,name:e.target.value}))} placeholder="Nombre cliente"/></div>
-                    <div><label style={{color:C.textMuted,fontSize:10,fontWeight:700,display:"block",marginBottom:3}}>RUT</label><input style={baseInput} value={quoteClient.rut} onChange={e=>setQuoteClient(p=>({...p,rut:e.target.value}))} placeholder="12.345.678-9"/></div>
-                    <div><label style={{color:C.textMuted,fontSize:10,fontWeight:700,display:"block",marginBottom:3}}>TELÉFONO</label><input style={baseInput} value={quoteClient.phone} onChange={e=>setQuoteClient(p=>({...p,phone:e.target.value}))} placeholder="+56 9 ..."/></div>
-                  </div>
-                </div>
-
-                {/* Buscar productos */}
-                <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:14,marginBottom:12}}>
-                  <div style={{fontSize:11,color:C.textDim,fontWeight:700,marginBottom:8}}>AGREGAR PRODUCTOS</div>
-                  <div style={{position:"relative"}}>
-                    <input style={{...baseInput,fontSize:15,padding:"12px 16px"}} placeholder="🔍 Buscar por código o nombre del producto..." value={quoteSearch} onChange={e=>setQuoteSearch(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&quoteResults.length>0)addToQuote(quoteResults[0]);if(e.key==="Escape")setQuoteSearch("");}}/>
-                    {quoteResults.length>0&&<div style={{position:"absolute",top:"100%",left:0,right:0,background:C.card,border:`2px solid ${C.accent}`,borderRadius:8,marginTop:4,maxHeight:250,overflowY:"auto",zIndex:50}}>
-                      {quoteResults.map(p=><div key={p.id} onClick={()=>addToQuote(p)} style={{padding:"10px 14px",cursor:"pointer",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}} onMouseEnter={e=>e.currentTarget.style.background=C.surface} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                        <span><span style={{fontFamily:"monospace",fontSize:11,color:C.textDim,marginRight:10}}>{p.code}</span><span style={{fontWeight:600}}>{p.name}</span></span>
-                        <div style={{display:"flex",gap:10,alignItems:"center"}}><span style={{fontWeight:800,color:C.accent}}>{fmt(p.price)}</span><Badge bg={p.stock>0?C.success:C.danger}>{p.stock}u</Badge></div>
-                      </div>)}
-                    </div>}
-                  </div>
-                </div>
-
-                {/* Tabla de productos cotizados */}
-                <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,overflow:"auto",minHeight:200}}>
-                  <table style={{width:"100%",borderCollapse:"collapse"}}>
-                    <thead><tr style={{background:C.surface}}>{["Código","Producto","P. Unitario","Cantidad","Total",""].map(h=><th key={h} style={{padding:"10px 12px",textAlign:"left",fontSize:11,color:C.textMuted,fontWeight:700}}>{h}</th>)}</tr></thead>
-                    <tbody>
-                      {quoteCart.length===0?<tr><td colSpan={6} style={{padding:40,textAlign:"center",color:C.textDim}}>Busca productos arriba para agregarlos a la cotización</td></tr>
-                      :quoteCart.map(it=>{
-                        const prod=products.find(p=>p.id===it.product_id);
-                        return <tr key={it.product_id} style={{borderBottom:`1px solid ${C.border}22`}}>
-                          <td style={{padding:"8px 12px",fontFamily:"monospace",fontSize:12,color:C.textDim}}>{prod?.code||""}</td>
-                          <td style={{padding:"8px 12px",fontSize:13,fontWeight:600}}>{it.product_name}</td>
-                          <td style={{padding:"8px 12px",fontSize:13}}>{fmt(it.price)}</td>
-                          <td style={{padding:"8px 12px"}}><div style={{display:"flex",alignItems:"center",gap:4}}>
-                            <button onClick={()=>setQuoteCart(p=>{const nq=it.qty-1;return nq<=0?p.filter(x=>x.product_id!==it.product_id):p.map(x=>x.product_id===it.product_id?{...x,qty:nq}:x);})} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,width:28,height:28,color:C.text,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
-                            <input type="number" min="1" value={it.qty} onChange={e=>{const v=parseInt(e.target.value)||1;setQuoteCart(p=>p.map(x=>x.product_id===it.product_id?{...x,qty:Math.max(1,v)}:x));}} style={{...baseInput,width:70,textAlign:"center",fontSize:15,fontWeight:700,padding:"4px 6px"}}/>
-                            <button onClick={()=>setQuoteCart(p=>p.map(x=>x.product_id===it.product_id?{...x,qty:x.qty+1}:x))} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,width:28,height:28,color:C.text,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
-                          </div></td>
-                          <td style={{padding:"8px 12px",fontSize:14,fontWeight:800}}>{fmt(it.price*it.qty)}</td>
-                          <td style={{padding:"8px 12px"}}><button onClick={()=>setQuoteCart(p=>p.filter(x=>x.product_id!==it.product_id))} style={{background:C.danger,border:"none",borderRadius:4,width:28,height:28,color:"#fff",cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button></td>
-                        </tr>;})}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Columna derecha: resumen */}
-              <div style={{width:280,minWidth:260}}>
-                <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:16,position:"sticky",top:76}}>
-                  <div style={{fontSize:11,color:C.textDim,fontWeight:700,marginBottom:12}}>RESUMEN COTIZACIÓN</div>
-                  <div style={{fontSize:13,color:C.textMuted,marginBottom:4}}>Productos: <strong style={{color:C.text}}>{quoteCart.length}</strong></div>
-                  <div style={{fontSize:13,color:C.textMuted,marginBottom:12}}>Unidades: <strong style={{color:C.text}}>{quoteCart.reduce((s,c)=>s+c.qty,0)}</strong></div>
-
-                  <div style={{borderTop:`1px solid ${C.border}`,paddingTop:12,marginBottom:12}}>
-                    <div style={{fontSize:11,color:C.textDim,fontWeight:700,marginBottom:8}}>DESCUENTO %</div>
-                    <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-                      {[0,5,10,15,20,25,30].map(v=><button key={v} onClick={()=>setQuoteDiscount(v)} style={{background:quoteDiscount===v?C.warning:C.surface,color:quoteDiscount===v?"#000":"#fff",border:"none",borderRadius:4,padding:"6px 10px",fontSize:12,fontWeight:700,cursor:"pointer"}}>{v}%</button>)}
-                      <input type="number" min="0" max="100" value={quoteDiscount||""} onChange={e=>setQuoteDiscount(Math.min(100,Math.max(0,parseInt(e.target.value)||0)))} style={{...baseInput,width:55,padding:"6px",textAlign:"center",fontSize:13,fontWeight:700}} placeholder="%"/>
+            {quoteView==="new"&&<div>
+              <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+                <div style={{flex:1,minWidth:400}}>
+                  <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:14,marginBottom:12}}>
+                    <div style={{fontSize:11,color:C.textDim,fontWeight:700,marginBottom:8}}>DATOS DEL CLIENTE (opcional)</div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                      {[["name","NOMBRE","Nombre cliente"],["rut","RUT","12.345.678-9"],["phone","TELÉFONO","+56 9 ..."]].map(([k,l,ph])=><div key={k}><label style={{color:C.textMuted,fontSize:10,fontWeight:700,display:"block",marginBottom:3}}>{l}</label><input style={baseInput} value={quoteClient[k]} onChange={e=>setQuoteClient(p=>({...p,[k]:e.target.value}))} placeholder={ph}/></div>)}
                     </div>
                   </div>
-
-                  {(()=>{const bruto=quoteCart.reduce((s,c)=>s+c.price*c.qty,0);const dcto=Math.round(bruto*quoteDiscount/100);const total=bruto-dcto;const neto=Math.round(total/1.19);const iva=total-neto;return <div style={{borderTop:`1px solid ${C.border}`,paddingTop:12}}>
-                    <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}><span style={{color:C.textMuted}}>Subtotal:</span><span style={{fontWeight:600}}>{fmt(bruto)}</span></div>
-                    {quoteDiscount>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4,color:C.warning}}><span>Dcto {quoteDiscount}%:</span><span>-{fmt(dcto)}</span></div>}
-                    <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:2,color:C.textDim}}><span>Neto:</span><span>{fmt(neto)}</span></div>
-                    <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:8,color:C.textDim}}><span>IVA 19%:</span><span>{fmt(iva)}</span></div>
-                    <div style={{display:"flex",justifyContent:"space-between",fontSize:22,fontWeight:900,borderTop:`1px solid ${C.border}`,paddingTop:8}}><span>TOTAL:</span><span style={{color:C.accent}}>{fmt(total)}</span></div>
-                  </div>;})()}
-
-                  {quoteCart.length>0&&<Btn bg={C.teal} hover="#009b7d" size="lg" style={{width:"100%",justifyContent:"center",marginTop:16}} onClick={()=>{const bruto=quoteCart.reduce((s,c)=>s+c.price*c.qty,0);const dcto=Math.round(bruto*quoteDiscount/100);const total=bruto-dcto;const neto=Math.round(total/1.19);const iva=total-neto;setQuotePreview({items:quoteCart,client:quoteClient,bruto,dcto,total,neto,iva,discount:quoteDiscount,date:new Date().toISOString()});}}>📄 GENERAR COTIZACIÓN</Btn>}
+                  <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:14,marginBottom:12}}>
+                    <div style={{fontSize:11,color:C.textDim,fontWeight:700,marginBottom:8}}>AGREGAR PRODUCTOS</div>
+                    <div style={{position:"relative"}}>
+                      <input style={{...baseInput,fontSize:15,padding:"12px 16px"}} placeholder="🔍 Buscar por código o nombre..." value={quoteSearch} onChange={e=>setQuoteSearch(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&quoteResults.length>0)addToQuote(quoteResults[0]);if(e.key==="Escape")setQuoteSearch("");}}/>
+                      {quoteResults.length>0&&<div style={{position:"absolute",top:"100%",left:0,right:0,background:C.card,border:`2px solid ${C.accent}`,borderRadius:8,marginTop:4,maxHeight:250,overflowY:"auto",zIndex:50}}>
+                        {quoteResults.map(p=><div key={p.id} onClick={()=>addToQuote(p)} style={{padding:"10px 14px",cursor:"pointer",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between"}} onMouseEnter={e=>e.currentTarget.style.background=C.surface} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                          <span><span style={{fontFamily:"monospace",fontSize:11,color:C.textDim,marginRight:10}}>{p.code}</span><span style={{fontWeight:600}}>{p.name}</span></span>
+                          <span style={{fontWeight:800,color:C.accent}}>{fmt(p.price)}</span>
+                        </div>)}
+                      </div>}
+                    </div>
+                  </div>
+                  <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,overflow:"auto",minHeight:200}}>
+                    <table style={{width:"100%",borderCollapse:"collapse"}}>
+                      <thead><tr style={{background:C.surface}}>{["Código","Producto","P. Unit.","Cantidad","Total",""].map(h=><th key={h} style={{padding:"10px 12px",textAlign:"left",fontSize:11,color:C.textMuted,fontWeight:700}}>{h}</th>)}</tr></thead>
+                      <tbody>{quoteCart.length===0?<tr><td colSpan={6} style={{padding:40,textAlign:"center",color:C.textDim}}>Busca productos para agregarlos</td></tr>
+                      :quoteCart.map(it=>{const prod=products.find(p=>p.id===it.product_id);return <tr key={it.product_id} style={{borderBottom:`1px solid ${C.border}22`}}>
+                        <td style={{padding:"8px 12px",fontFamily:"monospace",fontSize:12,color:C.textDim}}>{prod?.code||""}</td>
+                        <td style={{padding:"8px 12px",fontSize:13,fontWeight:600}}>{it.product_name}</td>
+                        <td style={{padding:"8px 12px",fontSize:13}}>{fmt(it.price)}</td>
+                        <td style={{padding:"8px 12px"}}><div style={{display:"flex",alignItems:"center",gap:4}}>
+                          <button onClick={()=>setQuoteCart(p=>{const nq=it.qty-1;return nq<=0?p.filter(x=>x.product_id!==it.product_id):p.map(x=>x.product_id===it.product_id?{...x,qty:nq}:x);})} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,width:28,height:28,color:C.text,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
+                          <input type="number" min="1" value={it.qty} onChange={e=>{const v=parseInt(e.target.value)||1;setQuoteCart(p=>p.map(x=>x.product_id===it.product_id?{...x,qty:Math.max(1,v)}:x));}} style={{...baseInput,width:70,textAlign:"center",fontSize:15,fontWeight:700,padding:"4px 6px"}}/>
+                          <button onClick={()=>setQuoteCart(p=>p.map(x=>x.product_id===it.product_id?{...x,qty:x.qty+1}:x))} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,width:28,height:28,color:C.text,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+                        </div></td>
+                        <td style={{padding:"8px 12px",fontSize:14,fontWeight:800}}>{fmt(it.price*it.qty)}</td>
+                        <td style={{padding:"8px 12px"}}><button onClick={()=>setQuoteCart(p=>p.filter(x=>x.product_id!==it.product_id))} style={{background:C.danger,border:"none",borderRadius:4,width:28,height:28,color:"#fff",cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button></td>
+                      </tr>;})}</tbody>
+                    </table>
+                  </div>
+                </div>
+                <div style={{width:280,minWidth:260}}>
+                  <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:16,position:"sticky",top:76}}>
+                    <div style={{fontSize:11,color:C.textDim,fontWeight:700,marginBottom:12}}>RESUMEN</div>
+                    <div style={{fontSize:13,color:C.textMuted,marginBottom:4}}>Productos: <strong style={{color:C.text}}>{quoteCart.length}</strong></div>
+                    <div style={{fontSize:13,color:C.textMuted,marginBottom:12}}>Unidades: <strong style={{color:C.text}}>{quoteCart.reduce((s,c)=>s+c.qty,0)}</strong></div>
+                    <div style={{borderTop:`1px solid ${C.border}`,paddingTop:12,marginBottom:12}}>
+                      <div style={{fontSize:11,color:C.textDim,fontWeight:700,marginBottom:8}}>DESCUENTO %</div>
+                      <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                        {[0,5,10,15,20,25,30].map(v=><button key={v} onClick={()=>setQuoteDiscount(v)} style={{background:quoteDiscount===v?C.warning:C.surface,color:quoteDiscount===v?"#000":"#fff",border:"none",borderRadius:4,padding:"6px 10px",fontSize:12,fontWeight:700,cursor:"pointer"}}>{v}%</button>)}
+                        <input type="number" min="0" max="100" value={quoteDiscount||""} onChange={e=>setQuoteDiscount(Math.min(100,Math.max(0,parseInt(e.target.value)||0)))} style={{...baseInput,width:55,padding:"6px",textAlign:"center",fontSize:13,fontWeight:700}} placeholder="%"/>
+                      </div>
+                    </div>
+                    {(()=>{const bruto=quoteCart.reduce((s,c)=>s+c.price*c.qty,0);const dcto=Math.round(bruto*quoteDiscount/100);const total=bruto-dcto;const neto=Math.round(total/1.19);const iva=total-neto;return <div style={{borderTop:`1px solid ${C.border}`,paddingTop:12}}>
+                      <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}><span style={{color:C.textMuted}}>Subtotal:</span><span style={{fontWeight:600}}>{fmt(bruto)}</span></div>
+                      {quoteDiscount>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4,color:C.warning}}><span>Dcto {quoteDiscount}%:</span><span>-{fmt(dcto)}</span></div>}
+                      <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:2,color:C.textDim}}><span>Neto:</span><span>{fmt(neto)}</span></div>
+                      <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:8,color:C.textDim}}><span>IVA 19%:</span><span>{fmt(iva)}</span></div>
+                      <div style={{display:"flex",justifyContent:"space-between",fontSize:22,fontWeight:900,borderTop:`1px solid ${C.border}`,paddingTop:8}}><span>TOTAL:</span><span style={{color:C.accent}}>{fmt(total)}</span></div>
+                    </div>;})()}
+                    <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:16}}>
+                      {quoteCart.length>0&&<Btn bg={C.teal} hover="#009b7d" size="lg" style={{width:"100%",justifyContent:"center"}} onClick={()=>{const bruto=quoteCart.reduce((s,c)=>s+c.price*c.qty,0);const dcto=Math.round(bruto*quoteDiscount/100);const total=bruto-dcto;const neto=Math.round(total/1.19);const iva=total-neto;setQuotePreview({items:quoteCart,client:quoteClient,bruto,dcto,total,neto,iva,discount:quoteDiscount,date:new Date().toISOString()});}}>📄 GENERAR</Btn>}
+                      <Btn bg={C.danger} hover="#b71c1c" style={{width:"100%",justifyContent:"center"}} onClick={()=>{setQuoteCart([]);setQuoteDiscount(0);setQuoteClient({name:"",rut:"",phone:""});}}>🗑️ LIMPIAR</Btn>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
+            </div>}
+
+            {quoteView==="history"&&<div>
+              {savedQuotes.length===0?<div style={{textAlign:"center",padding:60,background:C.card,borderRadius:8}}><div style={{fontSize:40,marginBottom:8}}>📄</div><div style={{color:C.textMuted}}>No hay cotizaciones guardadas</div></div>
+              :<div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,overflow:"auto"}}>
+                <table style={{width:"100%",borderCollapse:"collapse",minWidth:800}}>
+                  <thead><tr style={{background:C.surface}}>{["N°","Fecha","Cajero","Cliente","Items","Dcto","Total","Estado","Acciones"].map(h=><th key={h} style={{padding:"10px 12px",textAlign:"left",fontSize:11,color:C.textMuted,fontWeight:700}}>{h}</th>)}</tr></thead>
+                  <tbody>{savedQuotes.map(q=><tr key={q.id} style={{borderBottom:`1px solid ${C.border}22`}}>
+                    <td style={{padding:"8px 12px",fontFamily:"monospace",fontWeight:700}}>{q.quote_number}</td>
+                    <td style={{padding:"8px 12px",fontSize:12,color:C.textMuted}}>{fmtDate(q.created_at)}</td>
+                    <td style={{padding:"8px 12px",fontSize:13}}>{q.user_name}</td>
+                    <td style={{padding:"8px 12px",fontSize:13}}>{q.client_name||"—"}</td>
+                    <td style={{padding:"8px 12px"}}>{(q.quote_items||[]).length}</td>
+                    <td style={{padding:"8px 12px"}}>{q.discount_percent>0?<Badge bg={C.warning}>{q.discount_percent}%</Badge>:"—"}</td>
+                    <td style={{padding:"8px 12px",fontSize:15,fontWeight:800,color:C.success}}>{fmt(q.total)}</td>
+                    <td style={{padding:"8px 12px"}}><Badge bg={q.status==="pending"?C.warning:q.status==="accepted"?C.success:C.danger}>{q.status==="pending"?"⏳ PENDIENTE":q.status==="accepted"?"✅ ACEPTADA":"❌ RECHAZADA"}</Badge></td>
+                    <td style={{padding:"8px 12px"}}><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                      <Btn bg={C.surface} hover={C.surfaceLight} size="sm" onClick={()=>setViewingQuote({...q,sale_number:q.quote_number,sale_items:(q.quote_items||[]).map(it=>({...it}))})}>🧾</Btn>
+                      {q.status==="pending"&&<>
+                        <Btn bg={C.success} hover={C.successDark} size="sm" onClick={()=>updateQuoteStatus(q.id,"accepted")}>✅</Btn>
+                        <Btn bg={C.danger} hover="#b71c1c" size="sm" onClick={()=>updateQuoteStatus(q.id,"rejected")}>❌</Btn>
+                      </>}
+                      {q.status==="accepted"&&<Btn bg={C.blue} hover={C.blueDark} size="sm" onClick={()=>loadQuoteToSale(q)}>🛒 VENDER</Btn>}
+                    </div></td>
+                  </tr>)}</tbody>
+                </table>
+              </div>}
+            </div>}
           </div>}
         </div>}
 
@@ -775,7 +835,7 @@ function StockPage({products,categories,storeName,onEditProduct}){
   </div>;
 }
 
-function QuotePreview({quote,storeName,storeRut,storeAddress,storePhone,onBack,onClose}){
+function QuotePreview({quote,storeName,storeRut,storeAddress,storePhone,onBack,onClose,onSave,saving}){
   const ref=useRef(null);
   const quoteNum="COT-"+Date.now().toString().slice(-6);
   const print=()=>{const c=ref.current.innerHTML;const w=window.open("","_blank","width=700,height=900");w.document.write(`<html><head><title>Cotización</title><style>body{font-family:Arial,sans-serif;font-size:13px;padding:30px;margin:0;color:#000;max-width:650px}table{width:100%;border-collapse:collapse}th,td{padding:8px 10px;text-align:left;border-bottom:1px solid #ddd}th{background:#f5f5f5;font-size:11px;text-transform:uppercase}.r{text-align:right}.b{font-weight:bold}.header{display:flex;justify-content:space-between;margin-bottom:20px}.line{border-top:2px solid #333;margin:15px 0}</style></head><body>${c}<script>window.print();setTimeout(()=>window.close(),1000)<\/script></body></html>`);};
@@ -804,7 +864,7 @@ function QuotePreview({quote,storeName,storeRut,storeAddress,storePhone,onBack,o
       </div>
       <div style={{marginTop:20,fontSize:10,color:"#999",textAlign:"center"}}>Esta cotización no constituye venta. Precios sujetos a cambio sin previo aviso.</div>
     </div>
-    <div style={{display:"flex",gap:8,justifyContent:"center",marginTop:16}}><Btn bg={C.surface} hover={C.surfaceLight} onClick={onBack}>← VOLVER</Btn><Btn bg={C.blue} hover={C.blueDark} onClick={print}>🖨️ IMPRIMIR</Btn><Btn bg={C.success} hover={C.successDark} onClick={onClose}>✅ LISTO</Btn></div>
+    <div style={{display:"flex",gap:8,justifyContent:"center",marginTop:16}}><Btn bg={C.surface} hover={C.surfaceLight} onClick={onBack}>← VOLVER</Btn><Btn bg={C.blue} hover={C.blueDark} onClick={print}>🖨️ IMPRIMIR</Btn>{onSave&&<Btn bg={C.success} hover={C.successDark} onClick={onSave} disabled={saving}>{saving?"⏳ GUARDANDO...":"💾 GUARDAR COTIZACIÓN"}</Btn>}<Btn bg={C.teal} hover="#009b7d" onClick={onClose}>✅ LISTO</Btn></div>
   </div>;
 }
 
