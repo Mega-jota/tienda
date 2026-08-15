@@ -3,7 +3,7 @@
 ## Identidad del Proyecto
 
 - **Nombre**: Sistema Punto de Venta (POS)
-- **Versión actual**: v5.0
+- **Versión actual**: v5.1
 - **Mercado objetivo**: Comercio minorista Chile (almacenes, minimarkets, bazares, ferias)
 - **Idioma**: Español (Chile)
 - **Moneda**: Peso chileno (CLP), sin decimales
@@ -136,7 +136,7 @@ config (key PK, value)
 | v4.0 | — | Reportes diarios/semanales/mensuales, buscador en inventario, versionamiento |
 | v4.1 | — | Ganancia neta y margen % en reportes y cierre de caja |
 | v4.2 | — | Fix pistola código de barras (lectura DOM directa en Enter) |
-| v5.0 | — | Alertas de stock con campanita, módulo cotizaciones, datos de tienda en config |
+| v5.1 | — | Alertas de stock con campanita, módulo cotizaciones, datos de tienda en config |
 
 ---
 
