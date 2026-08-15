@@ -129,7 +129,18 @@ export default function POSApp() {
   const [prodCatFilter,setProdCatFilter]=useState(null);
   const [reportPeriod,setReportPeriod]=useState("today");
   const [salesSearch,setSalesSearch]=useState("");
-  const APP_VERSION = "v4.2";
+  const [stockAlertModal,setStockAlertModal]=useState(false);
+  const [quoteModal,setQuoteModal]=useState(false);
+  const [quoteCart,setQuoteCart]=useState([]);
+  const [quoteSearch,setQuoteSearch]=useState("");
+  const [quoteResults,setQuoteResults]=useState([]);
+  const [quoteClient,setQuoteClient]=useState({name:"",rut:"",phone:""});
+  const [quoteDiscount,setQuoteDiscount]=useState(0);
+  const [quotePreview,setQuotePreview]=useState(null);
+  const [storeRut,setStoreRut]=useState("");
+  const [storeAddress,setStoreAddress]=useState("");
+  const [storePhone,setStorePhone]=useState("");
+  const APP_VERSION = "v5.0";
   const searchRef=useRef(null);
 
   useEffect(()=>{loadAllData();},[]);
@@ -159,6 +170,9 @@ export default function POSApp() {
       if(catRes.error) throw catRes.error;
       setCategories(catRes.data||[]);setProviders(provRes.data||[]);setProducts(prodRes.data||[]);setUsers(userRes.data||[]);setSales(salesRes.data||[]);
       const sc=(configRes.data||[]).find(c=>c.key==="store_name");if(sc)setStoreName(sc.value);
+      const sr=(configRes.data||[]).find(c=>c.key==="store_rut");if(sr)setStoreRut(sr.value);
+      const sa=(configRes.data||[]).find(c=>c.key==="store_address");if(sa)setStoreAddress(sa.value);
+      const sp=(configRes.data||[]).find(c=>c.key==="store_phone");if(sp)setStorePhone(sp.value);
       setDbError(null);
     } catch(err){console.error(err);setDbError("No se pudo conectar con Supabase.");}
     setLoading(false);
@@ -174,6 +188,16 @@ export default function POSApp() {
   const saveUser=async(fd)=>{setSaving(true);try{if(editUser){await supabase.from("users").update(fd).eq("id",editUser.id);setUsers(p=>p.map(x=>x.id===editUser.id?{...x,...fd}:x));}else{const{data,error}=await supabase.from("users").insert(fd).select().single();if(error)throw error;setUsers(p=>[...p,data]);}}catch(e){alert("Error: "+e.message);}setUserModal(false);setEditUser(null);setSaving(false);};
   const deleteUser=async(id)=>{if(id===currentUser.id)return;if(!confirm("¿Eliminar?"))return;await supabase.from("users").delete().eq("id",id);setUsers(p=>p.filter(x=>x.id!==id));};
   const updateStoreName=async(n)=>{setStoreName(n);await supabase.from("config").upsert({key:"store_name",value:n});};
+  const updateStoreConfig=async(key,val,setter)=>{setter(val);await supabase.from("config").upsert({key,value:val});};
+
+  // COTIZACIONES
+  useEffect(()=>{
+    if(!quoteSearch.trim()){setQuoteResults([]);return;}
+    const q=quoteSearch.toLowerCase();
+    setQuoteResults(products.filter(p=>p.name.toLowerCase().includes(q)||p.code.includes(q)).slice(0,6));
+  },[quoteSearch,products]);
+  const addToQuote=(p)=>{setQuoteCart(prev=>{const ex=prev.find(c=>c.product_id===p.id);if(ex)return prev.map(c=>c.product_id===p.id?{...c,qty:c.qty+1}:c);return[...prev,{product_id:p.id,product_name:p.name,price:p.price,qty:1}];});setQuoteSearch("");};
+  const lowStockProducts=products.filter(p=>p.stock<=p.min_stock);
 
   // BÚSQUEDA tipo POS - compatible con pistola de código de barras
   // La pistola escribe muy rápido y envía Enter al final.
@@ -292,6 +316,12 @@ export default function POSApp() {
           {saving&&<Badge bg={C.warning}>GUARDANDO</Badge>}
           <Badge bg={C.success}>● ONLINE</Badge>
           <Badge bg={C.surface}>{APP_VERSION}</Badge>
+          {/* Campanita stock bajo */}
+          <button onClick={()=>setStockAlertModal(true)} style={{position:"relative",background:"none",border:"none",fontSize:20,cursor:"pointer",padding:"4px 6px"}}>
+            🔔
+            {lowStockProducts.length>0&&<span style={{position:"absolute",top:-2,right:-2,background:C.danger,color:"#fff",fontSize:9,fontWeight:800,borderRadius:10,padding:"1px 5px",minWidth:16,textAlign:"center"}}>{lowStockProducts.length}</span>}
+          </button>
+          {isAdmin&&<button onClick={()=>setQuoteModal(true)} style={{background:C.teal,border:"none",borderRadius:4,padding:"4px 10px",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer"}}>📄 COTIZAR</button>}
           <span style={{color:C.textMuted,fontSize:12}}>{currentUser.name}</span>
           <Btn bg={C.danger} size="sm" onClick={()=>{setCurrentUser(null);setCart([]);setDiscountPercent(0);}}>SALIR</Btn>
         </div>
@@ -558,9 +588,120 @@ export default function POSApp() {
       <Modal open={categoryModal} onClose={()=>{setCategoryModal(false);setEditCategory(null);}} title={editCategory?"EDITAR CATEGORÍA":"NUEVA CATEGORÍA"}><CategoryForm category={editCategory} onSave={saveCategory} onCancel={()=>{setCategoryModal(false);setEditCategory(null);}} saving={saving}/></Modal>
       <Modal open={providerModal} onClose={()=>{setProviderModal(false);setEditProvider(null);}} title={editProvider?"EDITAR PROVEEDOR":"NUEVO PROVEEDOR"}><ProviderForm provider={editProvider} onSave={saveProvider} onCancel={()=>{setProviderModal(false);setEditProvider(null);}} saving={saving}/></Modal>
       <Modal open={userModal} onClose={()=>{setUserModal(false);setEditUser(null);}} title={editUser?"EDITAR USUARIO":"NUEVO USUARIO"}><UserForm user={editUser} onSave={saveUser} onCancel={()=>{setUserModal(false);setEditUser(null);}} saving={saving}/></Modal>
-      <Modal open={configModal} onClose={()=>setConfigModal(false)} title="⚙️ CONFIGURACIÓN"><div style={{marginBottom:16}}><label style={{color:C.textMuted,fontSize:11,fontWeight:700,display:"block",marginBottom:6}}>NOMBRE DEL NEGOCIO</label><input style={baseInput} value={storeName} onChange={e=>updateStoreName(e.target.value)}/></div><div style={{padding:14,background:C.surface,borderRadius:8,fontSize:12,color:C.textMuted,lineHeight:1.8}}><div style={{fontWeight:700,color:C.text,marginBottom:4}}>ℹ️ SISTEMA POS</div><div>Versión: <strong style={{color:C.accent}}>{APP_VERSION}</strong></div><div>☁️ Base de datos: Supabase (nube)</div><div>Los datos son permanentes y seguros.</div><div>IVA: 19% (Chile)</div></div></Modal>
+      <Modal open={configModal} onClose={()=>setConfigModal(false)} title="⚙️ CONFIGURACIÓN">
+        <div style={{fontSize:11,color:C.textDim,fontWeight:700,marginBottom:12}}>DATOS DEL NEGOCIO (aparecen en tickets y cotizaciones)</div>
+        {[["NOMBRE",storeName,e=>updateStoreName(e.target.value)],["RUT",storeRut,e=>updateStoreConfig("store_rut",e.target.value,setStoreRut)],["DIRECCIÓN",storeAddress,e=>updateStoreConfig("store_address",e.target.value,setStoreAddress)],["TELÉFONO",storePhone,e=>updateStoreConfig("store_phone",e.target.value,setStorePhone)]].map(([l,v,fn])=><div key={l} style={{marginBottom:10}}><label style={{color:C.textMuted,fontSize:11,fontWeight:700,display:"block",marginBottom:4}}>{l}</label><input style={baseInput} value={v} onChange={fn}/></div>)}
+        <div style={{padding:14,background:C.surface,borderRadius:8,fontSize:12,color:C.textMuted,lineHeight:1.8,marginTop:8}}><div style={{fontWeight:700,color:C.text,marginBottom:4}}>ℹ️ SISTEMA POS</div><div>Versión: <strong style={{color:C.accent}}>{APP_VERSION}</strong></div><div>☁️ Supabase (nube) · IVA 19% Chile</div></div>
+      </Modal>
+
+      {/* MODAL ALERTAS DE STOCK */}
+      <Modal open={stockAlertModal} onClose={()=>setStockAlertModal(false)} title={`🔔 Alertas de Stock (${lowStockProducts.length})`} wide>
+        {lowStockProducts.length===0?<div style={{textAlign:"center",padding:30,color:C.textDim}}><div style={{fontSize:40,marginBottom:8}}>✅</div>Todos los productos están sobre el mínimo de stock</div>
+        :<div style={{overflow:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",minWidth:600}}>
+          <thead><tr style={{background:C.surface}}>{["Código","Producto","Categoría","Stock Actual","Stock Mín.","Estado",""].map(h=><th key={h} style={{padding:"10px 12px",textAlign:"left",fontSize:11,color:C.textMuted,fontWeight:700}}>{h}</th>)}</tr></thead>
+          <tbody>{lowStockProducts.sort((a,b)=>a.stock-b.stock).map(p=>{
+            const cat=categories.find(c=>c.id===p.category_id);
+            const isZero=p.stock<=0;
+            return <tr key={p.id} style={{borderBottom:`1px solid ${C.border}22`,background:isZero?C.danger+"15":"transparent"}}>
+              <td style={{padding:"8px 12px",fontFamily:"monospace",fontSize:12}}>{p.code}</td>
+              <td style={{padding:"8px 12px",fontSize:13,fontWeight:600}}>{p.name}</td>
+              <td style={{padding:"8px 12px"}}><Badge bg={C.blue}>{cat?.name||"—"}</Badge></td>
+              <td style={{padding:"8px 12px",fontSize:16,fontWeight:800,color:isZero?C.danger:C.warning}}>{p.stock}</td>
+              <td style={{padding:"8px 12px",fontSize:13}}>{p.min_stock}</td>
+              <td style={{padding:"8px 12px"}}><Badge bg={isZero?C.danger:C.warning}>{isZero?"⛔ SIN STOCK":"⚠️ STOCK BAJO"}</Badge></td>
+              <td style={{padding:"8px 12px"}}><Btn bg={C.surface} hover={C.surfaceLight} size="sm" onClick={()=>{setEditProduct(p);setProductModal(true);setStockAlertModal(false);}}>✏️ Editar</Btn></td>
+            </tr>;})}
+          </tbody></table></div>}
+      </Modal>
+
+      {/* MODAL COTIZACIÓN */}
+      <Modal open={quoteModal} onClose={()=>{setQuoteModal(false);setQuotePreview(null);}} title="📄 COTIZACIÓN" wide>
+        {quotePreview?<QuotePreview quote={quotePreview} storeName={storeName} storeRut={storeRut} storeAddress={storeAddress} storePhone={storePhone} onBack={()=>setQuotePreview(null)} onClose={()=>{setQuoteModal(false);setQuotePreview(null);setQuoteCart([]);setQuoteClient({name:"",rut:"",phone:""});setQuoteDiscount(0);}}/>
+        :<div>
+          {/* Datos cliente */}
+          <div style={{fontSize:11,color:C.textDim,fontWeight:700,marginBottom:8}}>DATOS DEL CLIENTE</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}}>
+            <div><label style={{color:C.textMuted,fontSize:10,fontWeight:700,display:"block",marginBottom:3}}>NOMBRE</label><input style={baseInput} value={quoteClient.name} onChange={e=>setQuoteClient(p=>({...p,name:e.target.value}))} placeholder="Nombre cliente"/></div>
+            <div><label style={{color:C.textMuted,fontSize:10,fontWeight:700,display:"block",marginBottom:3}}>RUT</label><input style={baseInput} value={quoteClient.rut} onChange={e=>setQuoteClient(p=>({...p,rut:e.target.value}))} placeholder="12.345.678-9"/></div>
+            <div><label style={{color:C.textMuted,fontSize:10,fontWeight:700,display:"block",marginBottom:3}}>TELÉFONO</label><input style={baseInput} value={quoteClient.phone} onChange={e=>setQuoteClient(p=>({...p,phone:e.target.value}))} placeholder="+56 9 ..."/></div>
+          </div>
+          {/* Buscar productos */}
+          <div style={{fontSize:11,color:C.textDim,fontWeight:700,marginBottom:8}}>AGREGAR PRODUCTOS</div>
+          <div style={{position:"relative",marginBottom:12}}>
+            <input style={{...baseInput,fontSize:14}} placeholder="Buscar por código o nombre..." value={quoteSearch} onChange={e=>setQuoteSearch(e.target.value)}/>
+            {quoteResults.length>0&&<div style={{position:"absolute",top:"100%",left:0,right:0,background:C.card,border:`2px solid ${C.accent}`,borderRadius:8,marginTop:4,maxHeight:200,overflowY:"auto",zIndex:50}}>
+              {quoteResults.map(p=><div key={p.id} onClick={()=>addToQuote(p)} style={{padding:"8px 14px",cursor:"pointer",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between"}} onMouseEnter={e=>e.currentTarget.style.background=C.surface} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                <span><span style={{fontFamily:"monospace",fontSize:11,color:C.textDim,marginRight:8}}>{p.code}</span>{p.name}</span><span style={{fontWeight:700,color:C.accent}}>{fmt(p.price)}</span>
+              </div>)}
+            </div>}
+          </div>
+          {/* Tabla cotización */}
+          {quoteCart.length>0&&<div style={{background:C.surface,borderRadius:8,padding:2,marginBottom:12}}><table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead><tr>{["Producto","Precio","Cant.","Total",""].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",fontSize:11,color:C.textMuted}}>{h}</th>)}</tr></thead>
+            <tbody>{quoteCart.map(it=><tr key={it.product_id} style={{borderTop:`1px solid ${C.border}33`}}>
+              <td style={{padding:"6px 10px",fontSize:13}}>{it.product_name}</td>
+              <td style={{padding:"6px 10px",fontSize:13}}>{fmt(it.price)}</td>
+              <td style={{padding:"6px 10px"}}><div style={{display:"flex",alignItems:"center",gap:4}}>
+                <button onClick={()=>setQuoteCart(p=>{const nq=it.qty-1;return nq<=0?p.filter(x=>x.product_id!==it.product_id):p.map(x=>x.product_id===it.product_id?{...x,qty:nq}:x);})} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:4,width:22,height:22,color:C.text,cursor:"pointer"}}>-</button>
+                <span style={{fontWeight:700,width:24,textAlign:"center"}}>{it.qty}</span>
+                <button onClick={()=>setQuoteCart(p=>p.map(x=>x.product_id===it.product_id?{...x,qty:x.qty+1}:x))} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:4,width:22,height:22,color:C.text,cursor:"pointer"}}>+</button>
+              </div></td>
+              <td style={{padding:"6px 10px",fontWeight:700}}>{fmt(it.price*it.qty)}</td>
+              <td style={{padding:"6px 10px"}}><button onClick={()=>setQuoteCart(p=>p.filter(x=>x.product_id!==it.product_id))} style={{background:C.danger,border:"none",borderRadius:4,width:22,height:22,color:"#fff",cursor:"pointer",fontSize:11}}>✕</button></td>
+            </tr>)}</tbody>
+          </table></div>}
+          {/* Descuento y totales */}
+          {quoteCart.length>0&&<div>
+            <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:12}}>
+              <span style={{color:C.textMuted,fontSize:12,fontWeight:700}}>DESCUENTO:</span>
+              {[0,5,10,15,20].map(v=><button key={v} onClick={()=>setQuoteDiscount(v)} style={{background:quoteDiscount===v?C.warning:C.surface,color:quoteDiscount===v?"#000":"#fff",border:"none",borderRadius:4,padding:"4px 10px",fontSize:12,fontWeight:700,cursor:"pointer"}}>{v}%</button>)}
+            </div>
+            {(()=>{const bruto=quoteCart.reduce((s,c)=>s+c.price*c.qty,0);const dcto=Math.round(bruto*quoteDiscount/100);const total=bruto-dcto;const neto=Math.round(total/1.19);const iva=total-neto;return <div style={{display:"flex",justifyContent:"flex-end",gap:20,fontSize:13,color:C.textMuted}}>
+              {quoteDiscount>0&&<span>Dcto: <strong style={{color:C.warning}}>-{fmt(dcto)}</strong></span>}
+              <span>Neto: <strong>{fmt(neto)}</strong></span><span>IVA: <strong>{fmt(iva)}</strong></span><span style={{fontSize:18,color:C.text}}>Total: <strong style={{color:C.accent}}>{fmt(total)}</strong></span>
+            </div>;})()}
+            <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:16}}>
+              <Btn bg={C.surface} hover={C.surfaceLight} onClick={()=>{setQuoteCart([]);setQuoteDiscount(0);}}>LIMPIAR</Btn>
+              <Btn bg={C.teal} hover="#009b7d" onClick={()=>{const bruto=quoteCart.reduce((s,c)=>s+c.price*c.qty,0);const dcto=Math.round(bruto*quoteDiscount/100);const total=bruto-dcto;const neto=Math.round(total/1.19);const iva=total-neto;setQuotePreview({items:quoteCart,client:quoteClient,bruto,dcto,total,neto,iva,discount:quoteDiscount,date:new Date().toISOString()});}}>📄 GENERAR COTIZACIÓN</Btn>
+            </div>
+          </div>}
+        </div>}
+      </Modal>
     </div>
   );
+}
+
+function QuotePreview({quote,storeName,storeRut,storeAddress,storePhone,onBack,onClose}){
+  const ref=useRef(null);
+  const quoteNum="COT-"+Date.now().toString().slice(-6);
+  const print=()=>{const c=ref.current.innerHTML;const w=window.open("","_blank","width=700,height=900");w.document.write(`<html><head><title>Cotización</title><style>body{font-family:Arial,sans-serif;font-size:13px;padding:30px;margin:0;color:#000;max-width:650px}table{width:100%;border-collapse:collapse}th,td{padding:8px 10px;text-align:left;border-bottom:1px solid #ddd}th{background:#f5f5f5;font-size:11px;text-transform:uppercase}.r{text-align:right}.b{font-weight:bold}.header{display:flex;justify-content:space-between;margin-bottom:20px}.line{border-top:2px solid #333;margin:15px 0}</style></head><body>${c}<script>window.print();setTimeout(()=>window.close(),1000)<\/script></body></html>`);};
+  return <div>
+    <div ref={ref} style={{background:"#fff",color:"#000",fontFamily:"Arial,sans-serif",fontSize:13,padding:30,borderRadius:8,maxWidth:650,margin:"0 auto"}}>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:20}}>
+        <div><div style={{fontSize:22,fontWeight:800}}>{storeName}</div>{storeRut&&<div style={{fontSize:11,color:"#666"}}>RUT: {storeRut}</div>}{storeAddress&&<div style={{fontSize:11,color:"#666"}}>{storeAddress}</div>}{storePhone&&<div style={{fontSize:11,color:"#666"}}>Tel: {storePhone}</div>}</div>
+        <div style={{textAlign:"right"}}><div style={{fontSize:18,fontWeight:700,color:"#e94560"}}>COTIZACIÓN</div><div style={{fontSize:11,color:"#666"}}>N°: {quoteNum}</div><div style={{fontSize:11,color:"#666"}}>Fecha: {fmtDate(quote.date)}</div><div style={{fontSize:10,color:"#999",marginTop:4}}>Válida por 15 días</div></div>
+      </div>
+      {(quote.client.name||quote.client.rut)&&<div style={{background:"#f9f9f9",borderRadius:6,padding:12,marginBottom:16}}>
+        <div style={{fontSize:11,fontWeight:700,color:"#666",marginBottom:4}}>CLIENTE</div>
+        {quote.client.name&&<div>{quote.client.name}</div>}
+        {quote.client.rut&&<div style={{fontSize:12,color:"#666"}}>RUT: {quote.client.rut}</div>}
+        {quote.client.phone&&<div style={{fontSize:12,color:"#666"}}>Tel: {quote.client.phone}</div>}
+      </div>}
+      <table><thead><tr style={{background:"#f5f5f5"}}><th style={{fontSize:11}}>CANT.</th><th style={{fontSize:11}}>DESCRIPCIÓN</th><th style={{fontSize:11,textAlign:"right"}}>P. UNIT.</th><th style={{fontSize:11,textAlign:"right"}}>TOTAL</th></tr></thead>
+      <tbody>{quote.items.map((it,i)=><tr key={i}><td>{it.qty}</td><td>{it.product_name}</td><td style={{textAlign:"right"}}>{fmt(it.price)}</td><td style={{textAlign:"right",fontWeight:600}}>{fmt(it.price*it.qty)}</td></tr>)}</tbody></table>
+      <div style={{borderTop:"2px solid #333",marginTop:12,paddingTop:12}}>
+        <div style={{display:"flex",justifyContent:"flex-end"}}><div style={{width:250}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span>Subtotal:</span><span>{fmt(quote.bruto)}</span></div>
+          {quote.discount>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:3,color:"#c00"}}><span>Descuento ({quote.discount}%):</span><span>-{fmt(quote.dcto)}</span></div>}
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:3,fontSize:12,color:"#666"}}><span>Neto:</span><span>{fmt(quote.neto)}</span></div>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:3,fontSize:12,color:"#666"}}><span>IVA 19%:</span><span>{fmt(quote.iva)}</span></div>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:18,fontWeight:800,borderTop:"1px solid #333",paddingTop:6}}><span>TOTAL:</span><span>{fmt(quote.total)}</span></div>
+        </div></div>
+      </div>
+      <div style={{marginTop:20,fontSize:10,color:"#999",textAlign:"center"}}>Esta cotización no constituye venta. Precios sujetos a cambio sin previo aviso.</div>
+    </div>
+    <div style={{display:"flex",gap:8,justifyContent:"center",marginTop:16}}><Btn bg={C.surface} hover={C.surfaceLight} onClick={onBack}>← VOLVER</Btn><Btn bg={C.blue} hover={C.blueDark} onClick={print}>🖨️ IMPRIMIR</Btn><Btn bg={C.success} hover={C.successDark} onClick={onClose}>✅ LISTO</Btn></div>
+  </div>;
 }
 
 function ProductForm({product,categories,providers,onSave,onCancel,saving}){
