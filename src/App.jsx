@@ -140,10 +140,11 @@ export default function POSApp() {
   const [savedQuotes,setSavedQuotes]=useState([]);
   const [quoteView,setQuoteView]=useState("new");// new | history
   const [viewingQuote,setViewingQuote]=useState(null);
+  const [quoteHistorySearch,setQuoteHistorySearch]=useState("");
   const [storeRut,setStoreRut]=useState("");
   const [storeAddress,setStoreAddress]=useState("");
   const [storePhone,setStorePhone]=useState("");
-  const APP_VERSION = "v5.4";
+  const APP_VERSION = "v5.5";
   const searchRef=useRef(null);
 
   useEffect(()=>{loadAllData();},[]);
@@ -583,30 +584,37 @@ export default function POSApp() {
             </div>}
 
             {quoteView==="history"&&<div>
-              {savedQuotes.length===0?<div style={{textAlign:"center",padding:60,background:C.card,borderRadius:8}}><div style={{fontSize:40,marginBottom:8}}>📄</div><div style={{color:C.textMuted}}>No hay cotizaciones guardadas</div></div>
+              {/* Buscador */}
+              <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:12,marginBottom:12,display:"flex",gap:10,alignItems:"center"}}>
+                <div style={{flex:1}}><input style={{...baseInput,fontSize:14}} placeholder="🔍 Buscar por N° cotización, nombre cliente, RUT o producto..." value={quoteHistorySearch} onChange={e=>setQuoteHistorySearch(e.target.value)}/></div>
+                {quoteHistorySearch&&<Btn bg={C.surface} hover={C.surfaceLight} size="sm" onClick={()=>setQuoteHistorySearch("")}>✕ Limpiar</Btn>}
+              </div>
+              {(()=>{const filtered=savedQuotes.filter(q=>{if(!quoteHistorySearch)return true;const s=quoteHistorySearch.toLowerCase();return (q.quote_number||"").toLowerCase().includes(s)||(q.client_name||"").toLowerCase().includes(s)||(q.client_rut||"").toLowerCase().includes(s)||(q.quote_items||[]).some(it=>it.product_name.toLowerCase().includes(s));});return <div>
+              {quoteHistorySearch&&<div style={{color:C.textMuted,fontSize:12,marginBottom:8}}>{filtered.length} cotización{filtered.length!==1?"es":""} encontrada{filtered.length!==1?"s":""}</div>}
+              {filtered.length===0?<div style={{textAlign:"center",padding:60,background:C.card,borderRadius:8}}><div style={{fontSize:40,marginBottom:8}}>📄</div><div style={{color:C.textMuted}}>{quoteHistorySearch?"No se encontraron cotizaciones":"No hay cotizaciones guardadas"}</div></div>
               :<div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,overflow:"auto"}}>
                 <table style={{width:"100%",borderCollapse:"collapse",minWidth:800}}>
-                  <thead><tr style={{background:C.surface}}>{["N°","Fecha","Cajero","Cliente","Items","Dcto","Total","Estado","Acciones"].map(h=><th key={h} style={{padding:"10px 12px",textAlign:"left",fontSize:11,color:C.textMuted,fontWeight:700}}>{h}</th>)}</tr></thead>
-                  <tbody>{savedQuotes.map(q=><tr key={q.id} style={{borderBottom:`1px solid ${C.border}22`}}>
+                  <thead><tr style={{background:C.surface}}>{["N°","Fecha","Cajero","Cliente","RUT","Items","Dcto","Total","Estado","Acciones"].map(h=><th key={h} style={{padding:"10px 12px",textAlign:"left",fontSize:11,color:C.textMuted,fontWeight:700}}>{h}</th>)}</tr></thead>
+                  <tbody>{filtered.map(q=><tr key={q.id} style={{borderBottom:`1px solid ${C.border}22`}}>
                     <td style={{padding:"8px 12px",fontFamily:"monospace",fontWeight:700}}>{q.quote_number}</td>
                     <td style={{padding:"8px 12px",fontSize:12,color:C.textMuted}}>{fmtDate(q.created_at)}</td>
                     <td style={{padding:"8px 12px",fontSize:13}}>{q.user_name}</td>
-                    <td style={{padding:"8px 12px",fontSize:13}}>{q.client_name||"—"}</td>
+                    <td style={{padding:"8px 12px",fontSize:13,fontWeight:600}}>{q.client_name||"—"}</td>
+                    <td style={{padding:"8px 12px",fontSize:12,color:C.textDim,fontFamily:"monospace"}}>{q.client_rut||"—"}</td>
                     <td style={{padding:"8px 12px"}}>{(q.quote_items||[]).length}</td>
                     <td style={{padding:"8px 12px"}}>{q.discount_percent>0?<Badge bg={C.warning}>{q.discount_percent}%</Badge>:"—"}</td>
                     <td style={{padding:"8px 12px",fontSize:15,fontWeight:800,color:C.success}}>{fmt(q.total)}</td>
                     <td style={{padding:"8px 12px"}}><Badge bg={q.status==="pending"?C.warning:q.status==="accepted"?C.success:C.danger}>{q.status==="pending"?"⏳ PENDIENTE":q.status==="accepted"?"✅ ACEPTADA":"❌ RECHAZADA"}</Badge></td>
                     <td style={{padding:"8px 12px"}}><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-                      <Btn bg={C.surface} hover={C.surfaceLight} size="sm" onClick={()=>setViewingQuote({...q,sale_number:q.quote_number,sale_items:(q.quote_items||[]).map(it=>({...it}))})}>🧾</Btn>
-                      {q.status==="pending"&&<>
-                        <Btn bg={C.success} hover={C.successDark} size="sm" onClick={()=>updateQuoteStatus(q.id,"accepted")}>✅</Btn>
-                        <Btn bg={C.danger} hover="#b71c1c" size="sm" onClick={()=>updateQuoteStatus(q.id,"rejected")}>❌</Btn>
-                      </>}
+                      <Btn bg={C.surface} hover={C.surfaceLight} size="sm" onClick={()=>setViewingQuote({items:(q.quote_items||[]),client:{name:q.client_name,rut:q.client_rut,phone:q.client_phone},bruto:q.subtotal_bruto,dcto:q.discount_amount,total:q.total,neto:q.subtotal,iva:q.iva,discount:q.discount_percent,date:q.created_at,quote_number:q.quote_number})}>🧾 VER</Btn>
+                      {q.status==="pending"&&<Btn bg={C.success} hover={C.successDark} size="sm" onClick={()=>updateQuoteStatus(q.id,"accepted")}>✅</Btn>}
+                      {q.status==="pending"&&<Btn bg={C.danger} hover="#b71c1c" size="sm" onClick={()=>updateQuoteStatus(q.id,"rejected")}>❌</Btn>}
                       {q.status==="accepted"&&<Btn bg={C.blue} hover={C.blueDark} size="sm" onClick={()=>loadQuoteToSale(q)}>🛒 VENDER</Btn>}
                     </div></td>
                   </tr>)}</tbody>
                 </table>
               </div>}
+              </div>;})()}
             </div>}
           </div>}
         </div>}
@@ -837,7 +845,7 @@ function StockPage({products,categories,storeName,onEditProduct}){
 
 function QuotePreview({quote,storeName,storeRut,storeAddress,storePhone,onBack,onClose,onSave,saving}){
   const ref=useRef(null);
-  const quoteNum="COT-"+Date.now().toString().slice(-6);
+  const quoteNum=quote.quote_number||("COT-"+Date.now().toString().slice(-6));
   const print=()=>{const c=ref.current.innerHTML;const w=window.open("","_blank","width=700,height=900");w.document.write(`<html><head><title>Cotización</title><style>body{font-family:Arial,sans-serif;font-size:13px;padding:30px;margin:0;color:#000;max-width:650px}table{width:100%;border-collapse:collapse}th,td{padding:8px 10px;text-align:left;border-bottom:1px solid #ddd}th{background:#f5f5f5;font-size:11px;text-transform:uppercase}.r{text-align:right}.b{font-weight:bold}.header{display:flex;justify-content:space-between;margin-bottom:20px}.line{border-top:2px solid #333;margin:15px 0}</style></head><body>${c}<script>window.print();setTimeout(()=>window.close(),1000)<\/script></body></html>`);};
   return <div>
     <div ref={ref} style={{background:"#fff",color:"#000",fontFamily:"Arial,sans-serif",fontSize:13,padding:30,borderRadius:8,maxWidth:650,margin:"0 auto"}}>
