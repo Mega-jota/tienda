@@ -140,7 +140,7 @@ export default function POSApp() {
   const [storeRut,setStoreRut]=useState("");
   const [storeAddress,setStoreAddress]=useState("");
   const [storePhone,setStorePhone]=useState("");
-  const APP_VERSION = "v5.2";
+  const APP_VERSION = "v5.3";
   const searchRef=useRef(null);
 
   useEffect(()=>{loadAllData();},[]);
@@ -299,7 +299,7 @@ export default function POSApp() {
   if(!currentUser)return <div style={{minHeight:"100vh",background:`linear-gradient(135deg,${C.bg},#0f3460)`,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Segoe UI',system-ui,sans-serif"}}><div style={{background:C.card,borderRadius:16,padding:40,width:"min(400px,90%)",border:`2px solid ${C.border}`}}><div style={{textAlign:"center",marginBottom:32}}><div style={{fontSize:48,marginBottom:12}}>🏪</div><h1 style={{color:C.text,margin:0,fontSize:26,fontWeight:800}}>{storeName}</h1><p style={{color:C.textMuted,margin:"8px 0 0",fontSize:14}}>Punto de Venta</p></div>{loginError&&<div style={{background:C.danger+"33",color:C.accentLight,padding:"10px 14px",borderRadius:8,marginBottom:16,fontSize:13}}>{loginError}</div>}<div style={{marginBottom:16}}><label style={{color:C.textMuted,fontSize:12,fontWeight:600,display:"block",marginBottom:6}}>USUARIO</label><input style={baseInput} value={loginForm.username} onChange={e=>setLoginForm(p=>({...p,username:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleLogin()} placeholder="admin"/></div><div style={{marginBottom:24}}><label style={{color:C.textMuted,fontSize:12,fontWeight:600,display:"block",marginBottom:6}}>CONTRASEÑA</label><input type="password" style={baseInput} value={loginForm.password} onChange={e=>setLoginForm(p=>({...p,password:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleLogin()} placeholder="••••••"/></div><Btn bg={C.accent} hover={C.accentDark} size="lg" onClick={handleLogin} style={{width:"100%",justifyContent:"center"}}>INGRESAR</Btn><div style={{marginTop:16,padding:12,background:C.surface,borderRadius:8,fontSize:11,color:C.textDim}}><div>admin / admin123 | vendedor / venta123</div></div></div></div>;
 
   const isAdmin=currentUser.role==="admin";
-  const tabs=[{id:"pos",label:"💰 CAJA",show:true},{id:"products",label:"📦 PRODUCTOS",show:isAdmin},{id:"categories",label:"🏷️ CATEGORÍAS",show:isAdmin},{id:"providers",label:"🚚 PROVEEDORES",show:isAdmin},{id:"stock",label:`🔔 STOCK${lowStockProducts.length>0?" ("+lowStockProducts.length+")":""}`,show:true},{id:"sales",label:"📊 VENTAS",show:true},{id:"users",label:"👥 USUARIOS",show:isAdmin}].filter(t=>t.show);
+  const tabs=[{id:"pos",label:"💰 CAJA",show:true},{id:"products",label:"📦 PRODUCTOS",show:isAdmin},{id:"categories",label:"🏷️ CATEGORÍAS",show:isAdmin},{id:"providers",label:"🚚 PROVEEDORES",show:isAdmin},{id:"stock",label:`🔔 STOCK${lowStockProducts.length>0?" ("+lowStockProducts.length+")":""}`,show:true},{id:"quotes",label:"📄 COTIZAR",show:isAdmin},{id:"sales",label:"📊 VENTAS",show:true},{id:"users",label:"👥 USUARIOS",show:isAdmin}].filter(t=>t.show);
   const todaySales=sales.filter(s=>s.created_at&&s.created_at.startsWith(todayStr()));
   const todayTotal=todaySales.reduce((s,sale)=>s+sale.total,0);
   const lastSaleData=sales[0];
@@ -321,7 +321,6 @@ export default function POSApp() {
             🔔
             {lowStockProducts.length>0&&<span style={{position:"absolute",top:-2,right:-2,background:C.danger,color:"#fff",fontSize:9,fontWeight:800,borderRadius:10,padding:"1px 5px",minWidth:16,textAlign:"center"}}>{lowStockProducts.length}</span>}
           </button>
-          {isAdmin&&<button onClick={()=>setQuoteModal(true)} style={{background:C.teal,border:"none",borderRadius:4,padding:"4px 10px",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer"}}>📄 COTIZAR</button>}
           {isAdmin&&<button onClick={()=>setConfigModal(true)} style={{background:"none",border:"none",color:C.textMuted,fontSize:18,cursor:"pointer",padding:"2px 4px"}}>⚙️</button>}
           <span style={{color:C.textMuted,fontSize:12}}>{currentUser.name}</span>
           <Btn bg={C.danger} size="sm" onClick={()=>{setCurrentUser(null);setCart([]);setDiscountPercent(0);}}>SALIR</Btn>
@@ -458,6 +457,99 @@ export default function POSApp() {
 
         {/* ═══ STOCK ═══ */}
         {activeTab==="stock"&&<StockPage products={products} categories={categories} storeName={storeName} onEditProduct={(p)=>{setEditProduct(p);setProductModal(true);}}/>}
+
+        {/* ═══ COTIZACIONES ═══ */}
+        {activeTab==="quotes"&&<div>
+          {quotePreview?<QuotePreview quote={quotePreview} storeName={storeName} storeRut={storeRut} storeAddress={storeAddress} storePhone={storePhone} onBack={()=>setQuotePreview(null)} onClose={()=>{setQuotePreview(null);setQuoteCart([]);setQuoteClient({name:"",rut:"",phone:""});setQuoteDiscount(0);}}/>
+          :<div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}><h2 style={{margin:0,fontSize:20}}>📄 Cotizaciones</h2>
+              <div style={{display:"flex",gap:8}}>
+                <Btn bg={C.danger} hover="#b71c1c" onClick={()=>{setQuoteCart([]);setQuoteDiscount(0);setQuoteClient({name:"",rut:"",phone:""});}}>🗑️ LIMPIAR TODO</Btn>
+                {quoteCart.length>0&&<Btn bg={C.teal} hover="#009b7d" onClick={()=>{const bruto=quoteCart.reduce((s,c)=>s+c.price*c.qty,0);const dcto=Math.round(bruto*quoteDiscount/100);const total=bruto-dcto;const neto=Math.round(total/1.19);const iva=total-neto;setQuotePreview({items:quoteCart,client:quoteClient,bruto,dcto,total,neto,iva,discount:quoteDiscount,date:new Date().toISOString()});}}>📄 GENERAR COTIZACIÓN</Btn>}
+              </div>
+            </div>
+
+            <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+              {/* Columna izquierda: cliente + búsqueda + tabla */}
+              <div style={{flex:1,minWidth:400}}>
+                {/* Datos cliente */}
+                <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:14,marginBottom:12}}>
+                  <div style={{fontSize:11,color:C.textDim,fontWeight:700,marginBottom:8}}>DATOS DEL CLIENTE (opcional)</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                    <div><label style={{color:C.textMuted,fontSize:10,fontWeight:700,display:"block",marginBottom:3}}>NOMBRE</label><input style={baseInput} value={quoteClient.name} onChange={e=>setQuoteClient(p=>({...p,name:e.target.value}))} placeholder="Nombre cliente"/></div>
+                    <div><label style={{color:C.textMuted,fontSize:10,fontWeight:700,display:"block",marginBottom:3}}>RUT</label><input style={baseInput} value={quoteClient.rut} onChange={e=>setQuoteClient(p=>({...p,rut:e.target.value}))} placeholder="12.345.678-9"/></div>
+                    <div><label style={{color:C.textMuted,fontSize:10,fontWeight:700,display:"block",marginBottom:3}}>TELÉFONO</label><input style={baseInput} value={quoteClient.phone} onChange={e=>setQuoteClient(p=>({...p,phone:e.target.value}))} placeholder="+56 9 ..."/></div>
+                  </div>
+                </div>
+
+                {/* Buscar productos */}
+                <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:14,marginBottom:12}}>
+                  <div style={{fontSize:11,color:C.textDim,fontWeight:700,marginBottom:8}}>AGREGAR PRODUCTOS</div>
+                  <div style={{position:"relative"}}>
+                    <input style={{...baseInput,fontSize:15,padding:"12px 16px"}} placeholder="🔍 Buscar por código o nombre del producto..." value={quoteSearch} onChange={e=>setQuoteSearch(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&quoteResults.length>0)addToQuote(quoteResults[0]);if(e.key==="Escape")setQuoteSearch("");}}/>
+                    {quoteResults.length>0&&<div style={{position:"absolute",top:"100%",left:0,right:0,background:C.card,border:`2px solid ${C.accent}`,borderRadius:8,marginTop:4,maxHeight:250,overflowY:"auto",zIndex:50}}>
+                      {quoteResults.map(p=><div key={p.id} onClick={()=>addToQuote(p)} style={{padding:"10px 14px",cursor:"pointer",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}} onMouseEnter={e=>e.currentTarget.style.background=C.surface} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                        <span><span style={{fontFamily:"monospace",fontSize:11,color:C.textDim,marginRight:10}}>{p.code}</span><span style={{fontWeight:600}}>{p.name}</span></span>
+                        <div style={{display:"flex",gap:10,alignItems:"center"}}><span style={{fontWeight:800,color:C.accent}}>{fmt(p.price)}</span><Badge bg={p.stock>0?C.success:C.danger}>{p.stock}u</Badge></div>
+                      </div>)}
+                    </div>}
+                  </div>
+                </div>
+
+                {/* Tabla de productos cotizados */}
+                <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,overflow:"auto",minHeight:200}}>
+                  <table style={{width:"100%",borderCollapse:"collapse"}}>
+                    <thead><tr style={{background:C.surface}}>{["Código","Producto","P. Unitario","Cantidad","Total",""].map(h=><th key={h} style={{padding:"10px 12px",textAlign:"left",fontSize:11,color:C.textMuted,fontWeight:700}}>{h}</th>)}</tr></thead>
+                    <tbody>
+                      {quoteCart.length===0?<tr><td colSpan={6} style={{padding:40,textAlign:"center",color:C.textDim}}>Busca productos arriba para agregarlos a la cotización</td></tr>
+                      :quoteCart.map(it=>{
+                        const prod=products.find(p=>p.id===it.product_id);
+                        return <tr key={it.product_id} style={{borderBottom:`1px solid ${C.border}22`}}>
+                          <td style={{padding:"8px 12px",fontFamily:"monospace",fontSize:12,color:C.textDim}}>{prod?.code||""}</td>
+                          <td style={{padding:"8px 12px",fontSize:13,fontWeight:600}}>{it.product_name}</td>
+                          <td style={{padding:"8px 12px",fontSize:13}}>{fmt(it.price)}</td>
+                          <td style={{padding:"8px 12px"}}><div style={{display:"flex",alignItems:"center",gap:4}}>
+                            <button onClick={()=>setQuoteCart(p=>{const nq=it.qty-1;return nq<=0?p.filter(x=>x.product_id!==it.product_id):p.map(x=>x.product_id===it.product_id?{...x,qty:nq}:x);})} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,width:28,height:28,color:C.text,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
+                            <input type="number" min="1" value={it.qty} onChange={e=>{const v=parseInt(e.target.value)||1;setQuoteCart(p=>p.map(x=>x.product_id===it.product_id?{...x,qty:Math.max(1,v)}:x));}} style={{...baseInput,width:70,textAlign:"center",fontSize:15,fontWeight:700,padding:"4px 6px"}}/>
+                            <button onClick={()=>setQuoteCart(p=>p.map(x=>x.product_id===it.product_id?{...x,qty:x.qty+1}:x))} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,width:28,height:28,color:C.text,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+                          </div></td>
+                          <td style={{padding:"8px 12px",fontSize:14,fontWeight:800}}>{fmt(it.price*it.qty)}</td>
+                          <td style={{padding:"8px 12px"}}><button onClick={()=>setQuoteCart(p=>p.filter(x=>x.product_id!==it.product_id))} style={{background:C.danger,border:"none",borderRadius:4,width:28,height:28,color:"#fff",cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button></td>
+                        </tr>;})}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Columna derecha: resumen */}
+              <div style={{width:280,minWidth:260}}>
+                <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:16,position:"sticky",top:76}}>
+                  <div style={{fontSize:11,color:C.textDim,fontWeight:700,marginBottom:12}}>RESUMEN COTIZACIÓN</div>
+                  <div style={{fontSize:13,color:C.textMuted,marginBottom:4}}>Productos: <strong style={{color:C.text}}>{quoteCart.length}</strong></div>
+                  <div style={{fontSize:13,color:C.textMuted,marginBottom:12}}>Unidades: <strong style={{color:C.text}}>{quoteCart.reduce((s,c)=>s+c.qty,0)}</strong></div>
+
+                  <div style={{borderTop:`1px solid ${C.border}`,paddingTop:12,marginBottom:12}}>
+                    <div style={{fontSize:11,color:C.textDim,fontWeight:700,marginBottom:8}}>DESCUENTO %</div>
+                    <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                      {[0,5,10,15,20,25,30].map(v=><button key={v} onClick={()=>setQuoteDiscount(v)} style={{background:quoteDiscount===v?C.warning:C.surface,color:quoteDiscount===v?"#000":"#fff",border:"none",borderRadius:4,padding:"6px 10px",fontSize:12,fontWeight:700,cursor:"pointer"}}>{v}%</button>)}
+                      <input type="number" min="0" max="100" value={quoteDiscount||""} onChange={e=>setQuoteDiscount(Math.min(100,Math.max(0,parseInt(e.target.value)||0)))} style={{...baseInput,width:55,padding:"6px",textAlign:"center",fontSize:13,fontWeight:700}} placeholder="%"/>
+                    </div>
+                  </div>
+
+                  {(()=>{const bruto=quoteCart.reduce((s,c)=>s+c.price*c.qty,0);const dcto=Math.round(bruto*quoteDiscount/100);const total=bruto-dcto;const neto=Math.round(total/1.19);const iva=total-neto;return <div style={{borderTop:`1px solid ${C.border}`,paddingTop:12}}>
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}><span style={{color:C.textMuted}}>Subtotal:</span><span style={{fontWeight:600}}>{fmt(bruto)}</span></div>
+                    {quoteDiscount>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4,color:C.warning}}><span>Dcto {quoteDiscount}%:</span><span>-{fmt(dcto)}</span></div>}
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:2,color:C.textDim}}><span>Neto:</span><span>{fmt(neto)}</span></div>
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:8,color:C.textDim}}><span>IVA 19%:</span><span>{fmt(iva)}</span></div>
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:22,fontWeight:900,borderTop:`1px solid ${C.border}`,paddingTop:8}}><span>TOTAL:</span><span style={{color:C.accent}}>{fmt(total)}</span></div>
+                  </div>;})()}
+
+                  {quoteCart.length>0&&<Btn bg={C.teal} hover="#009b7d" size="lg" style={{width:"100%",justifyContent:"center",marginTop:16}} onClick={()=>{const bruto=quoteCart.reduce((s,c)=>s+c.price*c.qty,0);const dcto=Math.round(bruto*quoteDiscount/100);const total=bruto-dcto;const neto=Math.round(total/1.19);const iva=total-neto;setQuotePreview({items:quoteCart,client:quoteClient,bruto,dcto,total,neto,iva,discount:quoteDiscount,date:new Date().toISOString()});}}>📄 GENERAR COTIZACIÓN</Btn>}
+                </div>
+              </div>
+            </div>
+          </div>}
+        </div>}
 
         {activeTab==="sales"&&(()=>{
           // Calcular períodos
@@ -598,59 +690,7 @@ export default function POSApp() {
         <div style={{padding:14,background:C.surface,borderRadius:8,fontSize:12,color:C.textMuted,lineHeight:1.8,marginTop:8}}><div style={{fontWeight:700,color:C.text,marginBottom:4}}>ℹ️ SISTEMA POS</div><div>Versión: <strong style={{color:C.accent}}>{APP_VERSION}</strong></div><div>☁️ Supabase (nube) · IVA 19% Chile</div></div>
       </Modal>
 
-      {/* MODAL COTIZACIÓN */}
-      <Modal open={quoteModal} onClose={()=>{setQuoteModal(false);setQuotePreview(null);}} title="📄 COTIZACIÓN" wide>
-        {quotePreview?<QuotePreview quote={quotePreview} storeName={storeName} storeRut={storeRut} storeAddress={storeAddress} storePhone={storePhone} onBack={()=>setQuotePreview(null)} onClose={()=>{setQuoteModal(false);setQuotePreview(null);setQuoteCart([]);setQuoteClient({name:"",rut:"",phone:""});setQuoteDiscount(0);}}/>
-        :<div>
-          {/* Datos cliente */}
-          <div style={{fontSize:11,color:C.textDim,fontWeight:700,marginBottom:8}}>DATOS DEL CLIENTE</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}}>
-            <div><label style={{color:C.textMuted,fontSize:10,fontWeight:700,display:"block",marginBottom:3}}>NOMBRE</label><input style={baseInput} value={quoteClient.name} onChange={e=>setQuoteClient(p=>({...p,name:e.target.value}))} placeholder="Nombre cliente"/></div>
-            <div><label style={{color:C.textMuted,fontSize:10,fontWeight:700,display:"block",marginBottom:3}}>RUT</label><input style={baseInput} value={quoteClient.rut} onChange={e=>setQuoteClient(p=>({...p,rut:e.target.value}))} placeholder="12.345.678-9"/></div>
-            <div><label style={{color:C.textMuted,fontSize:10,fontWeight:700,display:"block",marginBottom:3}}>TELÉFONO</label><input style={baseInput} value={quoteClient.phone} onChange={e=>setQuoteClient(p=>({...p,phone:e.target.value}))} placeholder="+56 9 ..."/></div>
-          </div>
-          {/* Buscar productos */}
-          <div style={{fontSize:11,color:C.textDim,fontWeight:700,marginBottom:8}}>AGREGAR PRODUCTOS</div>
-          <div style={{position:"relative",marginBottom:12}}>
-            <input style={{...baseInput,fontSize:14}} placeholder="Buscar por código o nombre..." value={quoteSearch} onChange={e=>setQuoteSearch(e.target.value)}/>
-            {quoteResults.length>0&&<div style={{position:"absolute",top:"100%",left:0,right:0,background:C.card,border:`2px solid ${C.accent}`,borderRadius:8,marginTop:4,maxHeight:200,overflowY:"auto",zIndex:50}}>
-              {quoteResults.map(p=><div key={p.id} onClick={()=>addToQuote(p)} style={{padding:"8px 14px",cursor:"pointer",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between"}} onMouseEnter={e=>e.currentTarget.style.background=C.surface} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                <span><span style={{fontFamily:"monospace",fontSize:11,color:C.textDim,marginRight:8}}>{p.code}</span>{p.name}</span><span style={{fontWeight:700,color:C.accent}}>{fmt(p.price)}</span>
-              </div>)}
-            </div>}
-          </div>
-          {/* Tabla cotización */}
-          {quoteCart.length>0&&<div style={{background:C.surface,borderRadius:8,padding:2,marginBottom:12}}><table style={{width:"100%",borderCollapse:"collapse"}}>
-            <thead><tr>{["Producto","Precio","Cant.","Total",""].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",fontSize:11,color:C.textMuted}}>{h}</th>)}</tr></thead>
-            <tbody>{quoteCart.map(it=><tr key={it.product_id} style={{borderTop:`1px solid ${C.border}33`}}>
-              <td style={{padding:"6px 10px",fontSize:13}}>{it.product_name}</td>
-              <td style={{padding:"6px 10px",fontSize:13}}>{fmt(it.price)}</td>
-              <td style={{padding:"6px 10px"}}><div style={{display:"flex",alignItems:"center",gap:4}}>
-                <button onClick={()=>setQuoteCart(p=>{const nq=it.qty-1;return nq<=0?p.filter(x=>x.product_id!==it.product_id):p.map(x=>x.product_id===it.product_id?{...x,qty:nq}:x);})} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:4,width:22,height:22,color:C.text,cursor:"pointer"}}>-</button>
-                <span style={{fontWeight:700,width:24,textAlign:"center"}}>{it.qty}</span>
-                <button onClick={()=>setQuoteCart(p=>p.map(x=>x.product_id===it.product_id?{...x,qty:x.qty+1}:x))} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:4,width:22,height:22,color:C.text,cursor:"pointer"}}>+</button>
-              </div></td>
-              <td style={{padding:"6px 10px",fontWeight:700}}>{fmt(it.price*it.qty)}</td>
-              <td style={{padding:"6px 10px"}}><button onClick={()=>setQuoteCart(p=>p.filter(x=>x.product_id!==it.product_id))} style={{background:C.danger,border:"none",borderRadius:4,width:22,height:22,color:"#fff",cursor:"pointer",fontSize:11}}>✕</button></td>
-            </tr>)}</tbody>
-          </table></div>}
-          {/* Descuento y totales */}
-          {quoteCart.length>0&&<div>
-            <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:12}}>
-              <span style={{color:C.textMuted,fontSize:12,fontWeight:700}}>DESCUENTO:</span>
-              {[0,5,10,15,20].map(v=><button key={v} onClick={()=>setQuoteDiscount(v)} style={{background:quoteDiscount===v?C.warning:C.surface,color:quoteDiscount===v?"#000":"#fff",border:"none",borderRadius:4,padding:"4px 10px",fontSize:12,fontWeight:700,cursor:"pointer"}}>{v}%</button>)}
-            </div>
-            {(()=>{const bruto=quoteCart.reduce((s,c)=>s+c.price*c.qty,0);const dcto=Math.round(bruto*quoteDiscount/100);const total=bruto-dcto;const neto=Math.round(total/1.19);const iva=total-neto;return <div style={{display:"flex",justifyContent:"flex-end",gap:20,fontSize:13,color:C.textMuted}}>
-              {quoteDiscount>0&&<span>Dcto: <strong style={{color:C.warning}}>-{fmt(dcto)}</strong></span>}
-              <span>Neto: <strong>{fmt(neto)}</strong></span><span>IVA: <strong>{fmt(iva)}</strong></span><span style={{fontSize:18,color:C.text}}>Total: <strong style={{color:C.accent}}>{fmt(total)}</strong></span>
-            </div>;})()}
-            <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:16}}>
-              <Btn bg={C.surface} hover={C.surfaceLight} onClick={()=>{setQuoteCart([]);setQuoteDiscount(0);}}>LIMPIAR</Btn>
-              <Btn bg={C.teal} hover="#009b7d" onClick={()=>{const bruto=quoteCart.reduce((s,c)=>s+c.price*c.qty,0);const dcto=Math.round(bruto*quoteDiscount/100);const total=bruto-dcto;const neto=Math.round(total/1.19);const iva=total-neto;setQuotePreview({items:quoteCart,client:quoteClient,bruto,dcto,total,neto,iva,discount:quoteDiscount,date:new Date().toISOString()});}}>📄 GENERAR COTIZACIÓN</Btn>
-            </div>
-          </div>}
-        </div>}
-      </Modal>
+      {/* MODAL COTIZACIÓN eliminado - ahora es pestaña */}
     </div>
   );
 }
