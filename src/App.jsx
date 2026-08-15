@@ -140,7 +140,7 @@ export default function POSApp() {
   const [storeRut,setStoreRut]=useState("");
   const [storeAddress,setStoreAddress]=useState("");
   const [storePhone,setStorePhone]=useState("");
-  const APP_VERSION = "v5.0";
+  const APP_VERSION = "v5.2";
   const searchRef=useRef(null);
 
   useEffect(()=>{loadAllData();},[]);
@@ -299,7 +299,7 @@ export default function POSApp() {
   if(!currentUser)return <div style={{minHeight:"100vh",background:`linear-gradient(135deg,${C.bg},#0f3460)`,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Segoe UI',system-ui,sans-serif"}}><div style={{background:C.card,borderRadius:16,padding:40,width:"min(400px,90%)",border:`2px solid ${C.border}`}}><div style={{textAlign:"center",marginBottom:32}}><div style={{fontSize:48,marginBottom:12}}>🏪</div><h1 style={{color:C.text,margin:0,fontSize:26,fontWeight:800}}>{storeName}</h1><p style={{color:C.textMuted,margin:"8px 0 0",fontSize:14}}>Punto de Venta</p></div>{loginError&&<div style={{background:C.danger+"33",color:C.accentLight,padding:"10px 14px",borderRadius:8,marginBottom:16,fontSize:13}}>{loginError}</div>}<div style={{marginBottom:16}}><label style={{color:C.textMuted,fontSize:12,fontWeight:600,display:"block",marginBottom:6}}>USUARIO</label><input style={baseInput} value={loginForm.username} onChange={e=>setLoginForm(p=>({...p,username:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleLogin()} placeholder="admin"/></div><div style={{marginBottom:24}}><label style={{color:C.textMuted,fontSize:12,fontWeight:600,display:"block",marginBottom:6}}>CONTRASEÑA</label><input type="password" style={baseInput} value={loginForm.password} onChange={e=>setLoginForm(p=>({...p,password:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleLogin()} placeholder="••••••"/></div><Btn bg={C.accent} hover={C.accentDark} size="lg" onClick={handleLogin} style={{width:"100%",justifyContent:"center"}}>INGRESAR</Btn><div style={{marginTop:16,padding:12,background:C.surface,borderRadius:8,fontSize:11,color:C.textDim}}><div>admin / admin123 | vendedor / venta123</div></div></div></div>;
 
   const isAdmin=currentUser.role==="admin";
-  const tabs=[{id:"pos",label:"💰 CAJA",show:true},{id:"products",label:"📦 PRODUCTOS",show:isAdmin},{id:"categories",label:"🏷️ CATEGORÍAS",show:isAdmin},{id:"providers",label:"🚚 PROVEEDORES",show:isAdmin},{id:"sales",label:"📊 VENTAS",show:true},{id:"users",label:"👥 USUARIOS",show:isAdmin}].filter(t=>t.show);
+  const tabs=[{id:"pos",label:"💰 CAJA",show:true},{id:"products",label:"📦 PRODUCTOS",show:isAdmin},{id:"categories",label:"🏷️ CATEGORÍAS",show:isAdmin},{id:"providers",label:"🚚 PROVEEDORES",show:isAdmin},{id:"stock",label:`🔔 STOCK${lowStockProducts.length>0?" ("+lowStockProducts.length+")":""}`,show:true},{id:"sales",label:"📊 VENTAS",show:true},{id:"users",label:"👥 USUARIOS",show:isAdmin}].filter(t=>t.show);
   const todaySales=sales.filter(s=>s.created_at&&s.created_at.startsWith(todayStr()));
   const todayTotal=todaySales.reduce((s,sale)=>s+sale.total,0);
   const lastSaleData=sales[0];
@@ -317,11 +317,12 @@ export default function POSApp() {
           <Badge bg={C.success}>● ONLINE</Badge>
           <Badge bg={C.surface}>{APP_VERSION}</Badge>
           {/* Campanita stock bajo */}
-          <button onClick={()=>setStockAlertModal(true)} style={{position:"relative",background:"none",border:"none",fontSize:20,cursor:"pointer",padding:"4px 6px"}}>
+          <button onClick={()=>setActiveTab("stock")} style={{position:"relative",background:"none",border:"none",fontSize:20,cursor:"pointer",padding:"4px 6px"}}>
             🔔
             {lowStockProducts.length>0&&<span style={{position:"absolute",top:-2,right:-2,background:C.danger,color:"#fff",fontSize:9,fontWeight:800,borderRadius:10,padding:"1px 5px",minWidth:16,textAlign:"center"}}>{lowStockProducts.length}</span>}
           </button>
           {isAdmin&&<button onClick={()=>setQuoteModal(true)} style={{background:C.teal,border:"none",borderRadius:4,padding:"4px 10px",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer"}}>📄 COTIZAR</button>}
+          {isAdmin&&<button onClick={()=>setConfigModal(true)} style={{background:"none",border:"none",color:C.textMuted,fontSize:18,cursor:"pointer",padding:"2px 4px"}}>⚙️</button>}
           <span style={{color:C.textMuted,fontSize:12}}>{currentUser.name}</span>
           <Btn bg={C.danger} size="sm" onClick={()=>{setCurrentUser(null);setCart([]);setDiscountPercent(0);}}>SALIR</Btn>
         </div>
@@ -454,6 +455,9 @@ export default function POSApp() {
         {activeTab==="providers"&&<div>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><h2 style={{margin:0,fontSize:20}}>🚚 Proveedores</h2><Btn bg={C.blue} hover={C.blueDark} onClick={()=>{setEditProvider(null);setProviderModal(true);}}>+ NUEVO</Btn></div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:12}}>{providers.map(p=>{const pc=products.filter(pr=>pr.provider_id===p.id).length;return <div key={p.id} style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:16}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div><div style={{fontSize:15,fontWeight:700}}>{p.name}</div><div style={{fontSize:11,color:C.textDim,fontFamily:"monospace"}}>RUT: {p.rut}</div></div><Badge bg={C.blue}>{pc}</Badge></div><div style={{fontSize:12,color:C.textMuted,lineHeight:1.6}}>📞 {p.phone} | 📧 {p.email}<br/>📍 {p.address}</div><div style={{display:"flex",gap:6,marginTop:10}}><Btn bg={C.surface} hover={C.surfaceLight} size="sm" onClick={()=>{setEditProvider(p);setProviderModal(true);}}>✏️</Btn><Btn bg={C.danger} size="sm" onClick={()=>deleteProvider(p.id)}>🗑️</Btn></div></div>;})}</div></div>}
+
+        {/* ═══ STOCK ═══ */}
+        {activeTab==="stock"&&<StockPage products={products} categories={categories} storeName={storeName} onEditProduct={(p)=>{setEditProduct(p);setProductModal(true);}}/>}
 
         {activeTab==="sales"&&(()=>{
           // Calcular períodos
@@ -594,26 +598,6 @@ export default function POSApp() {
         <div style={{padding:14,background:C.surface,borderRadius:8,fontSize:12,color:C.textMuted,lineHeight:1.8,marginTop:8}}><div style={{fontWeight:700,color:C.text,marginBottom:4}}>ℹ️ SISTEMA POS</div><div>Versión: <strong style={{color:C.accent}}>{APP_VERSION}</strong></div><div>☁️ Supabase (nube) · IVA 19% Chile</div></div>
       </Modal>
 
-      {/* MODAL ALERTAS DE STOCK */}
-      <Modal open={stockAlertModal} onClose={()=>setStockAlertModal(false)} title={`🔔 Alertas de Stock (${lowStockProducts.length})`} wide>
-        {lowStockProducts.length===0?<div style={{textAlign:"center",padding:30,color:C.textDim}}><div style={{fontSize:40,marginBottom:8}}>✅</div>Todos los productos están sobre el mínimo de stock</div>
-        :<div style={{overflow:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",minWidth:600}}>
-          <thead><tr style={{background:C.surface}}>{["Código","Producto","Categoría","Stock Actual","Stock Mín.","Estado",""].map(h=><th key={h} style={{padding:"10px 12px",textAlign:"left",fontSize:11,color:C.textMuted,fontWeight:700}}>{h}</th>)}</tr></thead>
-          <tbody>{lowStockProducts.sort((a,b)=>a.stock-b.stock).map(p=>{
-            const cat=categories.find(c=>c.id===p.category_id);
-            const isZero=p.stock<=0;
-            return <tr key={p.id} style={{borderBottom:`1px solid ${C.border}22`,background:isZero?C.danger+"15":"transparent"}}>
-              <td style={{padding:"8px 12px",fontFamily:"monospace",fontSize:12}}>{p.code}</td>
-              <td style={{padding:"8px 12px",fontSize:13,fontWeight:600}}>{p.name}</td>
-              <td style={{padding:"8px 12px"}}><Badge bg={C.blue}>{cat?.name||"—"}</Badge></td>
-              <td style={{padding:"8px 12px",fontSize:16,fontWeight:800,color:isZero?C.danger:C.warning}}>{p.stock}</td>
-              <td style={{padding:"8px 12px",fontSize:13}}>{p.min_stock}</td>
-              <td style={{padding:"8px 12px"}}><Badge bg={isZero?C.danger:C.warning}>{isZero?"⛔ SIN STOCK":"⚠️ STOCK BAJO"}</Badge></td>
-              <td style={{padding:"8px 12px"}}><Btn bg={C.surface} hover={C.surfaceLight} size="sm" onClick={()=>{setEditProduct(p);setProductModal(true);setStockAlertModal(false);}}>✏️ Editar</Btn></td>
-            </tr>;})}
-          </tbody></table></div>}
-      </Modal>
-
       {/* MODAL COTIZACIÓN */}
       <Modal open={quoteModal} onClose={()=>{setQuoteModal(false);setQuotePreview(null);}} title="📄 COTIZACIÓN" wide>
         {quotePreview?<QuotePreview quote={quotePreview} storeName={storeName} storeRut={storeRut} storeAddress={storeAddress} storePhone={storePhone} onBack={()=>setQuotePreview(null)} onClose={()=>{setQuoteModal(false);setQuotePreview(null);setQuoteCart([]);setQuoteClient({name:"",rut:"",phone:""});setQuoteDiscount(0);}}/>
@@ -669,6 +653,86 @@ export default function POSApp() {
       </Modal>
     </div>
   );
+}
+
+function StockPage({products,categories,storeName,onEditProduct}){
+  const ref=useRef(null);
+  const [filter,setFilter]=useState("low");// low | all
+  const [catFilter,setCatFilter]=useState(null);
+  const [search,setSearch]=useState("");
+
+  const lowStock=products.filter(p=>p.stock<=p.min_stock);
+  const zeroStock=products.filter(p=>p.stock<=0);
+  const displayed=(filter==="low"?lowStock:products).filter(p=>{
+    const matchCat=!catFilter||p.category_id===catFilter;
+    const matchSearch=!search||p.name.toLowerCase().includes(search.toLowerCase())||p.code.includes(search);
+    return matchCat&&matchSearch;
+  }).sort((a,b)=>a.stock-b.stock);
+
+  const printReport=()=>{
+    const rows=displayed.map(p=>{const cat=categories.find(c=>c.id===p.category_id);const isZero=p.stock<=0;return `<tr style="border-bottom:1px solid #ddd;${isZero?'background:#fff0f0':''}"><td style="padding:6px 8px;font-family:monospace;font-size:11px">${p.code}</td><td style="padding:6px 8px;font-size:12px;font-weight:600">${p.name}</td><td style="padding:6px 8px;font-size:11px">${cat?.name||'—'}</td><td style="padding:6px 8px;font-size:14px;font-weight:800;color:${isZero?'#e74c3c':'#f5a623'};text-align:center">${p.stock}</td><td style="padding:6px 8px;text-align:center">${p.min_stock}</td><td style="padding:6px 8px;text-align:center;font-weight:600">${Math.max(0,p.min_stock-p.stock)}</td><td style="padding:6px 8px;font-size:11px;color:${isZero?'#e74c3c':'#f5a623'};font-weight:700">${isZero?'SIN STOCK':'BAJO'}</td></tr>`;}).join("");
+    const w=window.open("","_blank","width=800,height=900");
+    w.document.write(`<html><head><title>Reporte Stock</title><style>body{font-family:Arial,sans-serif;font-size:13px;padding:25px;color:#000}table{width:100%;border-collapse:collapse}th{background:#f0f0f0;padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;border-bottom:2px solid #333}h1{font-size:20px;margin:0}h2{font-size:14px;color:#666;margin:4px 0 0}.info{display:flex;gap:30px;margin:15px 0;font-size:12px;color:#444}.info strong{color:#000}.badge{display:inline-block;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:700;color:#fff}</style></head><body>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:15px"><div><h1>${storeName}</h1><h2>REPORTE DE STOCK — ${new Date().toLocaleDateString("es-CL")}</h2></div><div style="text-align:right;font-size:11px;color:#999">Generado: ${new Date().toLocaleString("es-CL")}</div></div>
+    <div class="info"><div><strong>${products.length}</strong> productos totales</div><div><span class="badge" style="background:#e74c3c">${zeroStock.length} sin stock</span></div><div><span class="badge" style="background:#f5a623;color:#000">${lowStock.length-zeroStock.length} stock bajo</span></div><div><strong>${displayed.length}</strong> en este reporte</div></div>
+    <table><thead><tr><th>Código</th><th>Producto</th><th>Categoría</th><th style="text-align:center">Stock</th><th style="text-align:center">Mínimo</th><th style="text-align:center">Faltan</th><th>Estado</th></tr></thead><tbody>${rows}</tbody></table>
+    <div style="margin-top:20px;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:8px">Reporte generado automáticamente por Sistema POS · ${storeName}</div>
+    <script>window.print();setTimeout(()=>window.close(),1500)<\/script></body></html>`);
+  };
+
+  return <div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:8}}>
+      <h2 style={{margin:0,fontSize:20}}>🔔 Control de Stock</h2>
+      <Btn bg={C.blue} hover={C.blueDark} onClick={printReport}>🖨️ IMPRIMIR REPORTE</Btn>
+    </div>
+
+    {/* Resumen cards */}
+    <div style={{display:"flex",gap:10,marginBottom:12,flexWrap:"wrap"}}>
+      <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:14,flex:1,minWidth:140}}><div style={{fontSize:10,color:C.textDim,fontWeight:700}}>TOTAL PRODUCTOS</div><div style={{fontSize:26,fontWeight:900}}>{products.length}</div></div>
+      <div style={{background:C.card,borderRadius:8,border:`2px solid ${C.danger}`,padding:14,flex:1,minWidth:140,cursor:"pointer"}} onClick={()=>{setFilter("low");setCatFilter(null);setSearch("");}}><div style={{fontSize:10,color:C.danger,fontWeight:700}}>⛔ SIN STOCK</div><div style={{fontSize:26,fontWeight:900,color:C.danger}}>{zeroStock.length}</div></div>
+      <div style={{background:C.card,borderRadius:8,border:`2px solid ${C.warning}`,padding:14,flex:1,minWidth:140,cursor:"pointer"}} onClick={()=>{setFilter("low");setCatFilter(null);setSearch("");}}><div style={{fontSize:10,color:C.warning,fontWeight:700}}>⚠️ STOCK BAJO</div><div style={{fontSize:26,fontWeight:900,color:C.warning}}>{lowStock.length-zeroStock.length}</div></div>
+      <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.success}`,padding:14,flex:1,minWidth:140,cursor:"pointer"}} onClick={()=>{setFilter("all");setCatFilter(null);setSearch("");}}><div style={{fontSize:10,color:C.success,fontWeight:700}}>✅ OK</div><div style={{fontSize:26,fontWeight:900,color:C.success}}>{products.length-lowStock.length}</div></div>
+    </div>
+
+    {/* Filtros */}
+    <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,padding:12,marginBottom:12,display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+      <div style={{display:"flex",gap:4}}>
+        <button onClick={()=>setFilter("low")} style={{background:filter==="low"?C.danger:C.surface,color:"#fff",border:"none",borderRadius:4,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>🔔 BAJO MÍNIMO ({lowStock.length})</button>
+        <button onClick={()=>setFilter("all")} style={{background:filter==="all"?C.blue:C.surface,color:"#fff",border:"none",borderRadius:4,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>📦 TODOS ({products.length})</button>
+      </div>
+      <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
+        <button onClick={()=>setCatFilter(null)} style={{background:!catFilter?C.accent:C.surface,color:"#fff",border:`1px solid ${!catFilter?C.accent:C.border}`,borderRadius:4,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>TODOS</button>
+        {categories.map(c=><button key={c.id} onClick={()=>setCatFilter(catFilter===c.id?null:c.id)} style={{background:catFilter===c.id?C.accent:C.surface,color:"#fff",border:`1px solid ${catFilter===c.id?C.accent:C.border}`,borderRadius:4,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>{c.name}</button>)}
+      </div>
+      <div style={{flex:1,minWidth:160}}><input style={{...baseInput,fontSize:13}} placeholder="🔍 Buscar..." value={search} onChange={e=>setSearch(e.target.value)}/></div>
+    </div>
+
+    {/* Tabla */}
+    <div style={{background:C.card,borderRadius:8,border:`1px solid ${C.border}`,overflow:"auto"}} ref={ref}>
+      <table style={{width:"100%",borderCollapse:"collapse",minWidth:750}}>
+        <thead><tr style={{background:C.surface}}>{["Código","Producto","Categoría","Proveedor","Stock","Mínimo","Faltan","Estado",""].map(h=><th key={h} style={{padding:"10px 12px",textAlign:"left",fontSize:11,color:C.textMuted,fontWeight:700}}>{h}</th>)}</tr></thead>
+        <tbody>
+          {displayed.length===0?<tr><td colSpan={9} style={{padding:40,textAlign:"center",color:C.textDim}}>{filter==="low"?"✅ Todos los productos están sobre el mínimo":"No se encontraron productos"}</td></tr>
+          :displayed.map(p=>{
+            const cat=categories.find(c=>c.id===p.category_id);
+            const prov=(products._provs||[]).find(pr=>pr.id===p.provider_id);
+            const isZero=p.stock<=0;
+            const faltan=Math.max(0,p.min_stock-p.stock);
+            return <tr key={p.id} style={{borderBottom:`1px solid ${C.border}22`,background:isZero?C.danger+"12":"transparent"}}>
+              <td style={{padding:"8px 12px",fontFamily:"monospace",fontSize:12}}>{p.code}</td>
+              <td style={{padding:"8px 12px",fontSize:13,fontWeight:600}}>{p.name}</td>
+              <td style={{padding:"8px 12px"}}><Badge bg={C.blue}>{cat?.name||"—"}</Badge></td>
+              <td style={{padding:"8px 12px",fontSize:12,color:C.textMuted}}>{prov?.name||""}</td>
+              <td style={{padding:"8px 12px",fontSize:16,fontWeight:800,color:isZero?C.danger:p.stock<=p.min_stock?C.warning:C.success}}>{p.stock}</td>
+              <td style={{padding:"8px 12px",fontSize:13,textAlign:"center"}}>{p.min_stock}</td>
+              <td style={{padding:"8px 12px",fontSize:14,fontWeight:700,color:faltan>0?C.danger:C.textDim,textAlign:"center"}}>{faltan>0?faltan:"—"}</td>
+              <td style={{padding:"8px 12px"}}><Badge bg={isZero?C.danger:p.stock<=p.min_stock?C.warning:C.success}>{isZero?"⛔ SIN STOCK":p.stock<=p.min_stock?"⚠️ BAJO":"✅ OK"}</Badge></td>
+              <td style={{padding:"8px 12px"}}><Btn bg={C.surface} hover={C.surfaceLight} size="sm" onClick={()=>onEditProduct(p)}>✏️</Btn></td>
+            </tr>;})}
+        </tbody>
+      </table>
+    </div>
+  </div>;
 }
 
 function QuotePreview({quote,storeName,storeRut,storeAddress,storePhone,onBack,onClose}){
